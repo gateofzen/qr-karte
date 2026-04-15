@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QR → カルテ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif; background: #f5f7fa; }
+  input, textarea, button { font-family: inherit; }
+  button:active { transform: scale(0.97); }
+  textarea:focus, input:focus { border-color: #2563eb !important; outline: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- jsQR: JS-only QR decoder (works on ALL browsers) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+
+<script>
+var React = window.React;
+var ReactDOM = window.ReactDOM;
+var useState = React.useState;
+var useRef = React.useRef;
+var useCallback = React.useCallback;
+var ce = React.createElement;
+
+// ===== TEST DATA =====
+var TEST_DATA = "MiwyMDI2LzA0LzExIDE1OjU0OjI5LGxpbFlrZG41a1haTU10zrgyYWVwYVd3L3dVY0lqeEpaZ1ZqN21jOW1QYnhPRnVWWGpDZlpKMm50NXdZdWc4c3VCb01URjcwQjZORlc0YXVvMURFRVpRSFE4NjAxampSZ1o1zrhEVXVFZktlTXlUZkhvUllaOEIsLOilv+adkeOAgOmbquaenc6444OL44K344Og44Op44CA44Om44Kt44KoLDIsLOOBquOBl+OAgSwsMTTmmYI0MOWIhumgg+OAgeOBhuOBquOCiuWjsOOCkuOBguOBkuOBpuOCveODleOCoeOBq+aoquOBq+OBquOBo+OBpuOBhOOBn+OAgjE05pmCNTDliIbpoIPjgIFDUEHjgpLlpKvjgYznorroqo3jgIFCUyBDUFLplovlp4vjgILmnIDntYIxNOaZgjM35YiG6aCD44CCNOaXpeWJjeOBi+OCieiDg+OBruiqv+WtkOOBjOaCquOBhOOAgeWYlOWQkDHlm57jgYLjgaPjgZ/jgajjga7jgZPjgajjgIIgIOWkseemge+8muOBquOBlyAwQEA8bWVtbz5A5aSr6KW/5p2R44CA5q2j77yI44Gr44GX44KA44KJ44CA44Gf44Gg44GX77yJQOW/g+mbu+Wbs++8mkFzeXN0b2xlLENQQSwsLDE5NTMxMjIxLDcyLDMwMCwsLCwsLDAsMCwsLDIwMjYvMDQvMTEgMTQ6NDQ6MjEsMjAyNi8wNC8xMSAxNDo1ODoyMSwyMDI2LzA0LzExIDE1OjI0LDIwMjYvMDQvMTEgMTU6Mjks6KW/77yVLDEsLOiouueZguenkSwsLDIwMjYvMDQvMTEgMTU6MDAsLCwsLCwsLCwsLDAyMTIsMSxBc3lzdG9sZSwwLDAsLHsiY29tIjoiIs64ImNwc3MiOiIizrgibHZvIjoiIs64Im1jbyI6IiLOuCJ2c3QiOiIyMDI2LzA0LzExIDE1OjE1OjA5In0s5ZCM5bGF44Gu5aSrLCw=";
+
+// ===== QR Image Decoder using jsQR =====
+function decodeQRFromImage(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var scales = [1, 1.5, 2, 3, 0.5];
+        for (var si = 0; si < scales.length; si++) {
+          var s = scales[si];
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * s);
+          canvas.height = Math.round(img.height * s);
+          var ctx = canvas.getContext("2d");
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+          if (code) {
+            resolve({ data: code.data, scale: s });
+            return;
+          }
+        }
+        reject(new Error("QRコードを検出できませんでした。画像が鮮明であることを確認してください。"));
+      };
+      img.onerror = function() { reject(new Error("画像の読み込みに失敗しました")); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { reject(new Error("ファイルの読み込みに失敗しました")); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ===== Data Decoder =====
+function decodeQRRaw(raw) {
+  var trimmed = raw.trim();
+  try {
+    var binaryStr = atob(trimmed);
+    var bytes = new Uint8Array(binaryStr.length);
+    for (var i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    var csv = new TextDecoder("utf-8").decode(bytes);
+    if (/^\d/.test(csv) && csv.includes(",")) return { csv: csv, method: "base64" };
+  } catch (e) { /* not base64 */ }
+  if (trimmed.includes(",") && /[\u3000-\u9FFF]/.test(trimmed)) return { csv: trimmed, method: "direct" };
+  return { csv: trimmed, method: "unknown" };
+}
+
+function parseCSV(csv) {
+  var pcsv = csv;
+  var jbs = [];
+  var re = /\{[^}]*\}/g;
+  var m;
+  while ((m = re.exec(csv)) !== null) { jbs.push(m[0]); pcsv = pcsv.replace(m[0], "__J" + (jbs.length-1) + "__"); }
+  var parts = pcsv.split(",");
+  return parts.map(function(p) { var v = p; jbs.forEach(function(jb, i) { v = v.replace("__J"+i+"__", jb); }); return v; });
+}
+
+function extractFields(parts) {
+  var nameRaw = parts[4] || "";
+  var np = nameRaw.split("\u03b8");
+  var nameKanji = (np[0]||"").trim(), nameKana = (np[1]||"").trim();
+
+  var narr = parts[9] || "";
+  var mainNarr = narr, memoFam = "", memoECG = "";
+  var mi = narr.indexOf("@@<memo>");
+  if (mi >= 0) {
+    mainNarr = narr.substring(0, mi).replace(/\s*0\s*$/, "").trim();
+    var ms = narr.substring(mi + 8).split("@").filter(Boolean);
+    ms.forEach(function(p) {
+      if (p.indexOf("\u5FC3\u96FB\u56F3") >= 0) memoECG = p.replace(/\u5FC3\u96FB\u56F3[\uFF1A:]/, "").trim();
+      else memoFam = p.trim();
+    });
+  }
+
+  var dob = parts[13] || "";
+  var dobF = dob.length===8 ? dob.substring(0,4)+"\u5E74"+parseInt(dob.substring(4,6))+"\u6708"+parseInt(dob.substring(6,8))+"\u65E5" : "";
+
+  function pTime(t) {
+    if (!t) return {full:"",hm:""};
+    var m = (t||"").match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})/);
+    if (!m) return {full:t,hm:""};
+    return {full:t, hm:parseInt(m[4])+"\u6642"+m[5]+"\u5206", date:parseInt(m[2])+"\u6708"+parseInt(m[3])+"\u65E5"};
+  }
+
+  var sq = (parts[29]||"").replace(/[\uFF10-\uFF19]/g, function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);});
+  var sqD = (sq.match(/^(.)/)||["",""])[1];
+  var sex = parts[5]==="1"?"\u7537\u6027":parts[5]==="2"?"\u5973\u6027":"";
+
+  return {
+    nameKanji:nameKanji, nameKana:nameKana, sex:sex,
+    age:parts[14]||"", dobFormatted:dobF,
+    jcs:parts[15]||"", rhythm:parts[48]||memoECG||"",
+    disease:parts[10]||"", reporter:parts[53]||"",
+    allergy:parts[7]||"",
+    mainNarrative:mainNarr, memoFamily:memoFam,
+    kakuchi:pTime(parts[25]), genChaku:pTime(parts[26]),
+    byoChaku:pTime(parts[28]), genPatsu:pTime(parts[35]),
+    squadName:sq, squadDir:sqD,
+    fieldCount:parts.length
+  };
+}
+
+// ===== Components =====
+function Field(props) {
+  var rows = props.rows || 1;
+  var s = {width:"100%",boxSizing:"border-box",padding:"8px 10px",border:"1px solid #d0d7de",borderRadius:6,fontSize:14,fontFamily:"'Noto Sans JP',sans-serif",background:"#fff",color:"#1a1a2e"};
+  return ce("div", {style:{marginBottom:10}},
+    props.label && ce("label", {style:{display:"block",fontSize:12,fontWeight:600,color:"#3a4a5a",marginBottom:3}}, props.label),
+    rows > 1
+      ? ce("textarea", {value:props.value, onChange:function(e){props.onChange(e.target.value)}, rows:rows, placeholder:props.placeholder, style:Object.assign({},s,{resize:"vertical",lineHeight:1.6})})
+      : ce("input", {type:"text", value:props.value, onChange:function(e){props.onChange(e.target.value)}, placeholder:props.placeholder, style:Object.assign({},s,{height:38})})
+  );
+}
+
+function InfoRow(props) {
+  if (!props.value) return null;
+  return ce("div", {style:{display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f0f0f5"}},
+    ce("span", {style:{fontSize:11,color:"#6b7a8a",minWidth:60}}, props.label),
+    ce("span", {style:{fontSize:14,color:"#1a1a2e",fontWeight:500}}, props.value)
+  );
+}
+
+// ===== Main App =====
+function App() {
+  var _s=useState(0),step=_s[0],setStep=_s[1];
+  var _r=useState(""),rawText=_r[0],setRawText=_r[1];
+  var _p=useState(null),parsed=_p[0],setParsed=_p[1];
+  var _e=useState({}),edits=_e[0],setEdits=_e[1];
+  var _c=useState(false),copied=_c[0],setCopied=_c[1];
+  var _er=useState(""),error=_er[0],setError=_er[1];
+  var _d=useState(""),debug=_d[0],setDebug=_d[1];
+  var _dc=useState(false),decoding=_dc[0],setDecoding=_dc[1];
+  var fileRef=useRef(null);
+  var outputRef=useRef(null);
+
+  function updateEdit(k,v){setEdits(function(prev){var n=Object.assign({},prev);n[k]=v;return n;});}
+
+  function buildGenbyo(d) {
+    var L=[];
+    if(d.age&&d.sex)L.push(d.age+"\u6B73"+d.sex+"\u3002");
+    if(d.mainNarrative)L.push(d.mainNarrative);
+    L.push("");
+    if(d.kakuchi.hm)L.push(d.kakuchi.hm+"\u3000\u6D88\u9632\u899A\u77E5");
+    if(d.genChaku.hm)L.push(d.genChaku.hm+"\u3000"+d.squadDir+"\u6551\u6025\u968A\u73FE\u7740");
+    L.push("");
+    L.push("\u5FC3\u505C\u6B62\u72B6\u614B\u3067\u3042\u308B\u3053\u3068\u304C\u5224\u660E");
+    if(d.rhythm)L.push(d.rhythm);
+    L.push("\u547C\u5438\u306A\u3057");
+    L.push("\u77B3\u5B54\u3000/\u3000");
+    L.push("\u5BFE\u5149\u53CD\u5C04\u6D88\u5931");
+    L.push("");
+    L.push("\u3000\u6642\u3000\u5206\u3000\u8ECA\u5185\u53CE\u5BB9");
+    L.push("");
+    L.push("BVM\u63DB\u6C17");
+    L.push("\u9759\u8108\u8DEF\u78BA\u4FDD");
+    L.push("");
+    L.push("\u3000\u6642\u3000\u5206\u3000\u30A2\u30C9\u30EC\u30CA\u30EA\u30F31mg\u9759\u6CE8");
+    if(d.byoChaku.hm)L.push(d.byoChaku.hm+"\u3000\u75C5\u7740");
+    return L.join("\n");
+  }
+
+  function generateKarte(d,e) {
+    return [
+      "\u3010\u4E3B\u8A34\u3011",e.chiefComplaint||"","",
+      "\u3010\u73FE\u75C5\u6B74\u3011",e.genbyo||"","",
+      "\u3010\u65E2\u5F80\u6B74\u3011",e.pastHistory||"\u306A\u3057","",
+      "\u3010\u670D\u85AC\u6B74\u3011",e.medication||"\u306A\u3057","",
+      "\u3010\u5BB6\u65CF\u6B74\u3011",e.familyHistory||"\u4E0D\u660E","",
+      "\u3010\u751F\u6D3B\u6B74\u3011",
+      "\u55AB\u7159\uFF1A"+(e.smoking||""),
+      "\u98F2\u9152\uFF1A"+(e.alcohol||""),
+      "\u30A2\u30EC\u30EB\u30AE\u30FC\uFF1A"+(e.allergyText||""),"",
+      "\u3010\u73FE\u75C7\u3011",
+      "\u6765\u9662\u6642"+(e.arrivalRhythm||""),
+      "\u547C\u5438"+(e.arrivalBreathing||"\u306A\u3057"),
+      "\u77B3\u5B54"+(e.arrivalPupil||"\u6563\u5927\u56FA\u5B9A"),
+      "\u5916\u50B7\u6240\u898B"+(e.trauma||"\u306A\u3057"),
+      "\u9854\u9762\u306F"+(e.face||"\u84BC\u767D"),"",
+      e.ucg||"UCG\uFF1A","",
+      "\u3010\u7D4C\u904E\u3011",e.hospitalCourse||"","",
+      e.deathTime||"","",
+      "\u3010\u691C\u67FB\u6240\u898B\u3011",e.labResults||"","",
+      e.imaging||"","",
+      "\u3010Assessment/Plan\u3011",e.assessment||""
+    ].join("\n");
+  }
+
+  // ---- File handler (jsQR) ----
+  function handleFile(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    setDecoding(true); setError(""); setDebug("QR\u30B3\u30FC\u30C9\u3092\u89E3\u6790\u4E2D...");
+
+    if (typeof jsQR === "undefined") {
+      setError("jsQR\u30E9\u30A4\u30D6\u30E9\u30EA\u304C\u8AAD\u307F\u8FBC\u307E\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u30DA\u30FC\u30B8\u3092\u30EA\u30ED\u30FC\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+      setDecoding(false);
+      return;
+    }
+
+    decodeQRFromImage(file).then(function(result) {
+      setRawText(result.data);
+      setDebug("QR\u691C\u51FA\u6210\u529F (scale=" + result.scale + "x) " + result.data.length + "\u6587\u5B57");
+      setDecoding(false);
+      // Reset file input so same file can be re-selected
+      if (fileRef.current) fileRef.current.value = "";
+    }).catch(function(err) {
+      setError(err.message);
+      setDebug("jsQR\u4F7F\u7528 - \u691C\u51FA\u5931\u6557");
+      setDecoding(false);
+      if (fileRef.current) fileRef.current.value = "";
+    });
+  }
+
+  // ---- Parse ----
+  function handleParse() {
+    if (!rawText.trim()) { setError("\u30C7\u30FC\u30BF\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044"); return; }
+    setError(""); setDebug("");
+    try {
+      var res = decodeQRRaw(rawText);
+      var parts = parseCSV(res.csv);
+      var data = extractFields(parts);
+      setDebug("\u30C7\u30B3\u30FC\u30C9: " + res.method + " / \u30D5\u30A3\u30FC\u30EB\u30C9\u6570: " + data.fieldCount + " / \u60A3\u8005\u540D: " + (data.nameKanji || "(\u672A\u691C\u51FA)"));
+
+      if (!data.nameKanji && !data.disease && data.fieldCount < 10) {
+        setError("\u6709\u52B9\u306AQR\u30C7\u30FC\u30BF\u3092\u8A8D\u8B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\n\u30D5\u30A3\u30FC\u30EB\u30C9\u6570: " + data.fieldCount);
+        return;
+      }
+      setParsed(data);
+      var isCPA = (data.disease||"").indexOf("CPA")>=0 || ["Asystole","VF","VT","PEA"].indexOf(data.rhythm)>=0 || parseInt(data.jcs)>=300;
+      setEdits({
+        chiefComplaint:isCPA?"\u9662\u5916\u5FC3\u505C\u6B62":(data.disease||""),
+        genbyo:buildGenbyo(data),
+        pastHistory:(data.allergy||"").indexOf("\u306A\u3057")>=0?"\u306A\u3057":(data.allergy||"\u306A\u3057"),
+        medication:"\u306A\u3057",familyHistory:"\u4E0D\u660E",
+        smoking:"",alcohol:"",allergyText:"",
+        arrivalRhythm:"",arrivalBreathing:isCPA?"\u306A\u3057":"",
+        arrivalPupil:isCPA?"\u6563\u5927\u56FA\u5B9A":"",
+        trauma:"\u306A\u3057",face:isCPA?"\u84BC\u767D":"",
+        ucg:"UCG\uFF1A",hospitalCourse:"",deathTime:"",
+        labResults:"",imaging:"",assessment:""
+      });
+      setStep(1);
+    } catch(err) {
+      setError("\u30D1\u30FC\u30B9\u30A8\u30E9\u30FC: " + err.message);
+    }
+  }
+
+  // ---- Copy ----
+  function handleCopy() {
+    if (!outputRef.current) return;
+    var text = outputRef.current.innerText;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function(){
+        setCopied(true); setTimeout(function(){setCopied(false);},2500);
+      }).catch(function(){doCopy(text);});
+    } else { doCopy(text); }
+  }
+  function doCopy(text) {
+    var ta=document.createElement("textarea");
+    ta.value=text;ta.style.position="fixed";ta.style.left="-9999px";
+    document.body.appendChild(ta);ta.select();document.execCommand("copy");
+    document.body.removeChild(ta);
+    setCopied(true);setTimeout(function(){setCopied(false);},2500);
+  }
+
+  // Styles
+  var btn={border:"none",padding:"12px 28px",borderRadius:8,fontSize:15,fontWeight:700,cursor:"pointer",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
+  var btnP=Object.assign({},btn,{background:"#2563eb",color:"#fff"});
+  var btnS=Object.assign({},btn,{background:"#16a34a",color:"#fff"});
+  var btnO={background:"transparent",color:"#2563eb",border:"2px solid #2563eb",padding:"10px 20px",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer"};
+
+  // ========== RENDER ==========
+  return ce("div",{style:{minHeight:"100vh",background:"#f5f7fa",maxWidth:640,margin:"0 auto"}},
+
+    // Header
+    ce("div",{style:{background:"linear-gradient(135deg,#0f172a,#1e3a5f)",color:"#fff",padding:"16px 20px",position:"sticky",top:0,zIndex:10}},
+      ce("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},
+        ce("div",null,
+          ce("div",{style:{fontSize:18,fontWeight:800}},"QR \u2192 \u30AB\u30EB\u30C6"),
+          ce("div",{style:{fontSize:11,opacity:0.7,marginTop:2}},"\u6551\u6025\u968AQR\u30B3\u30FC\u30C9\u304B\u3089\u96FB\u5B50\u30AB\u30EB\u30C6\u8A18\u8F09\u3092\u81EA\u52D5\u751F\u6210")
+        ),
+        step>0 && ce("button",{onClick:function(){setStep(0);setParsed(null);setEdits({});setRawText("");setError("");setDebug("");},
+          style:Object.assign({},btnO,{color:"#fff",borderColor:"rgba(255,255,255,0.4)",padding:"6px 14px",fontSize:12})},"\u30EA\u30BB\u30C3\u30C8")
+      ),
+      ce("div",{style:{display:"flex",gap:8,marginTop:12}},
+        ["QR\u8AAD\u53D6","\u78BA\u8A8D\u30FB\u7DE8\u96C6","\u30AB\u30EB\u30C6\u51FA\u529B"].map(function(label,i){
+          return ce("div",{key:i,style:{flex:1,textAlign:"center",fontSize:11,fontWeight:600,padding:"5px 0",borderRadius:4,
+            background:step===i?"rgba(255,255,255,0.2)":"transparent",opacity:step===i?1:0.4,
+            borderBottom:step===i?"2px solid #60a5fa":"2px solid transparent"}},label);
+        })
+      )
+    ),
+
+    ce("div",{style:{padding:"20px 16px"}},
+
+      // ===== STEP 0: INPUT =====
+      step===0 && ce("div",null,
+        // Image upload
+        ce("div",{style:{marginBottom:20}},
+          ce("div",{style:{fontSize:11,fontWeight:700,color:"#5a6a7a",letterSpacing:1,marginBottom:6}},"\u65B9\u6CD51: QR\u30B3\u30FC\u30C9\u753B\u50CF\u304B\u3089\u8AAD\u307F\u53D6\u308A"),
+          ce("input",{ref:fileRef,type:"file",accept:"image/*",onChange:handleFile,style:{display:"none"}}),
+          ce("button",{onClick:function(){fileRef.current&&fileRef.current.click()},disabled:decoding,
+            style:Object.assign({},btnP,{background:decoding?"#94a3b8":"#1d4ed8"})},
+            decoding?"\u89E3\u6790\u4E2D...":"\uD83D\uDCF7 QR\u753B\u50CF\u3092\u9078\u629E"),
+          ce("div",{style:{fontSize:11,color:"#8a9aaa",marginTop:4,textAlign:"center"}},
+            "\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u307E\u305F\u306F\u30AB\u30E1\u30E9\u3067\u64AE\u5F71\u3057\u305FQR\u753B\u50CF\u3092\u9078\u629E (Windows/Android/iOS\u5BFE\u5FDC)")
+        ),
+
+        // Divider
+        ce("div",{style:{textAlign:"center",color:"#aaa",fontSize:12,margin:"16px 0",display:"flex",alignItems:"center",gap:12}},
+          ce("div",{style:{flex:1,height:1,background:"#ddd"}}),"\u307E\u305F\u306F",ce("div",{style:{flex:1,height:1,background:"#ddd"}})
+        ),
+
+        // Text paste
+        ce("div",{style:{marginBottom:20}},
+          ce("div",{style:{fontSize:11,fontWeight:700,color:"#5a6a7a",letterSpacing:1,marginBottom:6}},"\u65B9\u6CD52: QR\u30C7\u30FC\u30BF\u3092\u30C6\u30AD\u30B9\u30C8\u8CBC\u308A\u4ED8\u3051"),
+          ce("textarea",{
+            value:rawText,
+            onChange:function(e){setRawText(e.target.value);setError("");},
+            placeholder:"QR\u30EA\u30FC\u30C0\u30FC\u30A2\u30D7\u30EA\u3067\u8AAD\u307F\u53D6\u3063\u305F\u7D50\u679C\u3092\u3053\u3053\u306B\u8CBC\u308A\u4ED8\u3051...",
+            rows:5,
+            style:{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:"1px solid #d0d7de",borderRadius:6,fontSize:13,fontFamily:"monospace",background:"#fff",color:"#1a1a2e",resize:"vertical"}
+          })
+        ),
+
+        // Test button
+        ce("div",{style:{marginBottom:16}},
+          ce("button",{onClick:function(){setRawText(TEST_DATA);setError("");setDebug("\u30B5\u30F3\u30D7\u30EB\u30C7\u30FC\u30BF\u3092\u8AAD\u307F\u8FBC\u307F\u307E\u3057\u305F\u3002\u300C\u30C7\u30FC\u30BF\u89E3\u6790\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002");},
+            style:Object.assign({},btn,{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:13,fontWeight:500})},
+            "\uD83E\uDDEA \u30B5\u30F3\u30D7\u30EB\u30C7\u30FC\u30BF\u3067\u52D5\u4F5C\u78BA\u8A8D")
+        ),
+
+        // Messages
+        error && ce("div",{style:{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,padding:"12px 14px",color:"#b91c1c",fontSize:13,marginBottom:12,whiteSpace:"pre-wrap",lineHeight:1.5}},error),
+        debug && ce("div",{style:{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"8px 12px",color:"#166534",fontSize:12,marginBottom:12}},debug),
+
+        // Parse button
+        ce("button",{onClick:handleParse,disabled:!rawText.trim(),
+          style:Object.assign({},btnP,{opacity:rawText.trim()?1:0.4,marginTop:4})},"\u30C7\u30FC\u30BF\u89E3\u6790 \u2192"),
+
+        // Data preview
+        rawText && ce("div",{style:{marginTop:12,background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",fontSize:11,color:"#6b7280"}},
+          ce("div",{style:{fontWeight:600,marginBottom:4}},"\u5165\u529B\u30C7\u30FC\u30BF ("+rawText.length+"\u6587\u5B57):"),
+          ce("div",{style:{fontFamily:"monospace",wordBreak:"break-all",maxHeight:60,overflow:"hidden"}},rawText.substring(0,200)+(rawText.length>200?"...":""))
+        )
+      ),
+
+      // ===== STEP 1: REVIEW & EDIT =====
+      step===1 && parsed && ce("div",null,
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16,borderLeft:"4px solid #2563eb"}},
+          ce("div",{style:{fontSize:17,fontWeight:800,color:"#1a1a2e"}},
+            parsed.nameKanji||"\u6C0F\u540D\u4E0D\u660E",
+            ce("span",{style:{fontSize:12,fontWeight:400,color:"#6b7a8a",marginLeft:8}},parsed.nameKana)
+          ),
+          ce("div",{style:{fontSize:13,color:"#4a5a6a",marginTop:2}},parsed.age+"\u6B73 "+parsed.sex+"\u3000"+parsed.dobFormatted+"\u751F"),
+          ce("span",{style:{display:"inline-block",marginTop:8,background:"#dc2626",color:"#fff",padding:"3px 10px",borderRadius:4,fontSize:12,fontWeight:700}},parsed.disease||parsed.rhythm)
+        ),
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},
+          ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",marginBottom:8}},"\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3"),
+          ce(InfoRow,{label:"\u899A\u77E5",value:parsed.kakuchi.hm}),
+          ce(InfoRow,{label:"\u73FE\u7740",value:parsed.genChaku.hm?(parsed.genChaku.hm+"\uFF08"+parsed.squadName+"\uFF09"):""}),
+          ce(InfoRow,{label:"\u73FE\u767A",value:parsed.genPatsu.hm}),
+          ce(InfoRow,{label:"\u75C5\u7740",value:parsed.byoChaku.hm}),
+          ce(InfoRow,{label:"\u5FC3\u96FB\u56F3",value:parsed.rhythm}),
+          ce(InfoRow,{label:"JCS",value:parsed.jcs}),
+          ce(InfoRow,{label:"\u95A2\u4FC2\u8005",value:parsed.memoFamily}),
+          ce(InfoRow,{label:"\u901A\u5831\u8005",value:parsed.reporter})
+        ),
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},
+          ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",marginBottom:12}},"\u30AB\u30EB\u30C6\u8A18\u8F09\u5185\u5BB9\uFF08\u3059\u3079\u3066\u7DE8\u96C6\u53EF\u80FD\uFF09"),
+          ce(Field,{label:"\u3010\u4E3B\u8A34\u3011",value:edits.chiefComplaint||"",onChange:function(v){updateEdit("chiefComplaint",v)},placeholder:"\u4F8B\uFF1A\u76EE\u6483\u306E\u3042\u308B\u9662\u5916\u5FC3\u505C\u6B62"}),
+          ce(Field,{label:"\u3010\u73FE\u75C5\u6B74\u3011",value:edits.genbyo||"",onChange:function(v){updateEdit("genbyo",v)},rows:20}),
+          ce(Field,{label:"\u3010\u65E2\u5F80\u6B74\u3011",value:edits.pastHistory||"",onChange:function(v){updateEdit("pastHistory",v)},placeholder:"\u306A\u3057"}),
+          ce(Field,{label:"\u3010\u670D\u85AC\u6B74\u3011",value:edits.medication||"",onChange:function(v){updateEdit("medication",v)},placeholder:"\u306A\u3057"}),
+          ce(Field,{label:"\u3010\u5BB6\u65CF\u6B74\u3011",value:edits.familyHistory||"",onChange:function(v){updateEdit("familyHistory",v)},placeholder:"\u4E0D\u660E"}),
+          ce("div",{style:{display:"flex",gap:8}},
+            ce("div",{style:{flex:1}},ce(Field,{label:"\u55AB\u7159",value:edits.smoking||"",onChange:function(v){updateEdit("smoking",v)}})),
+            ce("div",{style:{flex:1}},ce(Field,{label:"\u98F2\u9152",value:edits.alcohol||"",onChange:function(v){updateEdit("alcohol",v)}}))
+          ),
+          ce(Field,{label:"\u30A2\u30EC\u30EB\u30AE\u30FC",value:edits.allergyText||"",onChange:function(v){updateEdit("allergyText",v)}}),
+          ce(Field,{label:"\u3010\u73FE\u75C7\u3011\u6765\u9662\u6642\u30EA\u30BA\u30E0",value:edits.arrivalRhythm||"",onChange:function(v){updateEdit("arrivalRhythm",v)},placeholder:"\u4F8B\uFF1APEA"}),
+          ce(Field,{label:"UCG",value:edits.ucg||"",onChange:function(v){updateEdit("ucg",v)},placeholder:"UCG\uFF1A\u5FC3\u56E2\u6DB2\u306A\u3057\u3001\u58C1\u904B\u52D5\u306A\u3057"}),
+          ce(Field,{label:"\u3010\u7D4C\u904E\u3011",value:edits.hospitalCourse||"",onChange:function(v){updateEdit("hospitalCourse",v)},rows:8,placeholder:"\u9662\u5185\u3067\u306E\u51E6\u7F6E\u30FB\u7D4C\u904E\u3092\u8A18\u8F09..."}),
+          ce(Field,{label:"\u6B7B\u4EA1\u78BA\u8A8D\u6642\u523B",value:edits.deathTime||"",onChange:function(v){updateEdit("deathTime",v)},placeholder:"\u4F8B\uFF1A15\u664243\u5206\u3000\u6B7B\u4EA1\u78BA\u8A8D"}),
+          ce(Field,{label:"\u3010\u691C\u67FB\u6240\u898B\u3011",value:edits.labResults||"",onChange:function(v){updateEdit("labResults",v)},rows:5,placeholder:"\uFF1CBGA\uFF1E\npH  pCO2  pO2  HCO3  BE  lactate"}),
+          ce(Field,{label:"\u753B\u50CF\u691C\u67FB",value:edits.imaging||"",onChange:function(v){updateEdit("imaging",v)},rows:4,placeholder:"\uFF1CAi-CT\uFF1E"}),
+          ce(Field,{label:"\u3010Assessment/Plan\u3011",value:edits.assessment||"",onChange:function(v){updateEdit("assessment",v)},rows:3})
+        ),
+        ce("button",{onClick:function(){setStep(2)},style:btnP},"\u30AB\u30EB\u30C6\u6587\u66F8\u3092\u751F\u6210 \u2192")
+      ),
+
+      // ===== STEP 2: OUTPUT =====
+      step===2 && parsed && ce("div",null,
+        ce("div",{style:{position:"sticky",top:80,zIndex:5,display:"flex",gap:8,marginBottom:16}},
+          ce("button",{onClick:handleCopy,style:copied?btnS:btnP},copied?"\u2713 \u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F\uFF01":"\uD83D\uDCCB \u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC"),
+          ce("button",{onClick:function(){setStep(1)},style:Object.assign({},btnO,{whiteSpace:"nowrap"})},"\u2190 \u7DE8\u96C6")
+        ),
+        ce("div",{ref:outputRef,style:{background:"#fff",borderRadius:10,padding:"20px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",fontSize:14,lineHeight:1.8,color:"#1a1a2e",whiteSpace:"pre-wrap",wordBreak:"break-all"}},
+          generateKarte(parsed,edits)
+        ),
+        ce("div",{style:{marginTop:16}},
+          ce("button",{onClick:handleCopy,style:copied?btnS:btnP},copied?"\u2713 \u30B3\u30D4\u30FC\u6E08\u307F":"\uD83D\uDCCB \u30B3\u30D4\u30FC")
+        )
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(ce(App));
+</script>
+</body>
+</html>
