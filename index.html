@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QR → カルテ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.9/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif; background: #f5f7fa; }
+  input, textarea, button { font-family: inherit; }
+  button:active { transform: scale(0.97); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+const FONT = "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif";
+
+// ===== QR Data Parser =====
+function parseQRData(raw) {
+  let csv;
+  try {
+    const bytes = Uint8Array.from(atob(raw.trim()), c => c.charCodeAt(0));
+    csv = new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    csv = raw.trim();
+  }
+
+  // Protect JSON field from comma-split
+  let jsonField = "";
+  const jsonMatch = csv.match(/\{[^}]+\}/);
+  if (jsonMatch) {
+    jsonField = jsonMatch[0];
+    csv = csv.replace(jsonField, "___JSON___");
+  }
+
+  const parts = csv.split(",");
+  const jsonIdx = parts.indexOf("___JSON___");
+  if (jsonIdx >= 0) parts[jsonIdx] = jsonField;
+
+  // Name (kanji θ kana)
+  const nameRaw = parts[4] || "";
+  const nameParts = nameRaw.split("\u03b8");
+  const nameKanji = (nameParts[0] || "").trim();
+  const nameKana = (nameParts[1] || "").trim();
+
+  // Field [9]: narrative with @@<memo>
+  const narrativeRaw = parts[9] || "";
+  let mainNarrative = narrativeRaw;
+  let memoFamily = "";
+  let memoECG = "";
+  const memoSplit = narrativeRaw.split("@@<memo>");
+  if (memoSplit.length > 1) {
+    mainNarrative = memoSplit[0].replace(/\s*0\s*$/, "").trim();
+    const memoParts = memoSplit[1].split("@").filter(Boolean);
+    memoParts.forEach(p => {
+      if (p.includes("心電図")) memoECG = p.replace("心電図：", "").trim();
+      else memoFamily = p.trim();
+    });
+  }
+
+  // DOB
+  const dobRaw = parts[13] || "";
+  const dobFormatted = dobRaw
+    ? `${dobRaw.substring(0,4)}年${parseInt(dobRaw.substring(4,6))}月${parseInt(dobRaw.substring(6,8))}日`
+    : "";
+
+  // Time parser
+  const parseTime = (t) => {
+    if (!t) return { full: "", hm: "", date: "" };
+    const m = t.match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return { full: t, hm: t, date: "" };
+    return {
+      full: t,
+      hm: `${parseInt(m[4])}時${m[5]}分`,
+      date: `${parseInt(m[2])}月${parseInt(m[3])}日`,
+      year: m[1], month: parseInt(m[2]), day: parseInt(m[3]),
+      hour: parseInt(m[4]), min: m[5],
+    };
+  };
+
+  const kakuchi  = parseTime(parts[25]);
+  const genChaku = parseTime(parts[26]);
+  const byoChaku = parseTime(parts[28]);
+  const genPatsu = parseTime(parts[35]);
+
+  const squadRaw = parts[29] || "";
+  const squadName = squadRaw.replace(/[０-９]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)
+  );
+  const squadDirection = squadName.match(/^(.)/) ? squadName.match(/^(.)/)[1] : "";
+
+  return {
+    nameKanji, nameKana,
+    sex: parts[5] === "1" ? "男性" : parts[5] === "2" ? "女性" : "",
+    age: parts[14] || "",
+    dobFormatted, dobRaw,
+    jcs: parts[15] || "",
+    rhythm: parts[48] || memoECG || "",
+    disease: parts[10] || "",
+    reporter: parts[53] || "",
+    allergy: parts[7] || "",
+    mainNarrative, memoFamily, memoECG,
+    kakuchi, genChaku, byoChaku, genPatsu,
+    squadName, squadDirection,
+    bp_sys: parts[19] || "", bp_dia: parts[20] || "",
+    hr: parts[21] || "", rr: parts[22] || "",
+    bt: parts[23] || "", spo2: parts[24] || "",
+    rawFields: parts,
+  };
+}
+
+// ===== カルテ Text Generator =====
+function generateKarte(data, edits) {
+  const e = { ...data, ...edits };
+  return [
+    "【主訴】",
+    e.chiefComplaint || "院外心停止",
+    "",
+    "【現病歴】",
+    e.genbyo || "",
+    "",
+    "【既往歴】",
+    e.pastHistory || "なし",
+    "",
+    "【服薬歴】",
+    e.medication || "なし",
+    "",
+    "【家族歴】",
+    e.familyHistory || "不明",
+    "",
+    "【生活歴】",
+    "喫煙：" + (e.smoking || ""),
+    "飲酒：" + (e.alcohol || ""),
+    "アレルギー：" + (e.allergyText || e.allergy || ""),
+    "",
+    "【現症】",
+    "来院時" + (e.arrivalRhythm || e.rhythm || ""),
+    "呼吸" + (e.arrivalBreathing || "なし"),
+    "瞳孔" + (e.arrivalPupil || "散大固定"),
+    "外傷所見" + (e.trauma || "なし"),
+    "顔面は" + (e.face || "蒼白"),
+    "",
+    e.ucg || "UCG：",
+    "",
+    "【経過】",
+    e.hospitalCourse || "",
+    "",
+    e.deathTime || "",
+    "",
+    "【検査所見】",
+    e.labResults || "",
+    "",
+    e.imaging || "",
+    "",
+    "【Assessment/Plan】",
+    e.assessment || "",
+  ].join("\n");
+}
+
+// ===== UI Components =====
+function Section({ title, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: "#5a6a7a",
+        textTransform: "uppercase", letterSpacing: 1.5,
+        marginBottom: 6,
+      }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, rows, placeholder }) {
+  rows = rows || 1;
+  const shared = {
+    width: "100%", boxSizing: "border-box",
+    padding: "8px 10px", border: "1px solid #d0d7de",
+    borderRadius: 6, fontSize: 14, fontFamily: FONT,
+    background: "#fff", color: "#1a1a2e", outline: "none",
+  };
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {label && <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#3a4a5a", marginBottom: 3 }}>{label}</label>}
+      {rows > 1
+        ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} placeholder={placeholder} style={{ ...shared, resize: "vertical", lineHeight: 1.6 }} />
+        : <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...shared, height: 38 }} />
+      }
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "4px 0", borderBottom: "1px solid #f0f0f5" }}>
+      <span style={{ fontSize: 11, color: "#6b7a8a", minWidth: 70 }}>{label}</span>
+      <span style={{ fontSize: 14, color: "#1a1a2e", fontWeight: 500 }}>{value || "—"}</span>
+    </div>
+  );
+}
+
+// ===== Main App =====
+function App() {
+  const [step, setStep] = useState(0);
+  const [rawText, setRawText] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [edits, setEdits] = useState({});
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+  const [decoding, setDecoding] = useState(false);
+  const fileRef = useRef(null);
+  const outputRef = useRef(null);
+
+  const updateEdit = useCallback((key, val) => {
+    setEdits(prev => ({ ...prev, [key]: val }));
+  }, []);
+
+  // ---- QR decode from image ----
+  const handleFile = useCallback(async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setDecoding(true);
+    setError("");
+    try {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+
+      if ("BarcodeDetector" in window) {
+        const detector = new BarcodeDetector({ formats: ["qr_code"] });
+        for (const scale of [1, 1.5, 2, 3]) {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const results = await detector.detect(canvas);
+          if (results.length > 0) {
+            setRawText(results[0].rawValue);
+            URL.revokeObjectURL(url);
+            setDecoding(false);
+            return;
+          }
+        }
+      }
+      URL.revokeObjectURL(url);
+      setError("QRコードを検出できませんでした。テキスト欄に直接貼り付けてください。\n（※ iOSのSafariはBarcodeDetector非対応のため、別のQRリーダーアプリで読み取った結果を貼り付けてください）");
+    } catch (err) {
+      setError("読み取りエラー: " + err.message);
+    }
+    setDecoding(false);
+  }, []);
+
+  // ---- Build 現病歴 template ----
+  const buildGenbyo = useCallback(() => {
+    if (!parsed) return "";
+    const d = parsed;
+    const lines = [];
+    if (d.age && d.sex) lines.push(d.age + "歳" + d.sex + "。");
+    if (d.mainNarrative) lines.push(d.mainNarrative);
+    lines.push("");
+    if (d.kakuchi.hm) lines.push(d.kakuchi.hm + "　消防覚知");
+    if (d.genChaku.hm) lines.push(d.genChaku.hm + "　" + d.squadDirection + "救急隊現着");
+    lines.push("");
+    lines.push("心停止状態であることが判明");
+    if (d.rhythm) lines.push(d.rhythm);
+    lines.push("呼吸なし");
+    lines.push("瞳孔　/　");
+    lines.push("対光反射消失");
+    lines.push("");
+    lines.push("　　時　　分　車内収容");
+    lines.push("");
+    lines.push("BVM換気");
+    lines.push("静脈路確保");
+    lines.push("");
+    lines.push("　　時　　分　アドレナリン1mg静注");
+    if (d.byoChaku.hm) lines.push(d.byoChaku.hm + "　病着");
+    return lines.join("\n");
+  }, [parsed]);
+
+  // ---- Parse ----
+  const handleParse = useCallback(() => {
+    if (!rawText.trim()) { setError("データを入力してください"); return; }
+    setError("");
+    try {
+      const data = parseQRData(rawText);
+      if (!data.nameKanji && !data.disease) {
+        setError("有効なQRデータを認識できませんでした");
+        return;
+      }
+      setParsed(data);
+      const isCPA = (data.disease || "").includes("CPA") || data.rhythm === "Asystole" || data.rhythm === "VF" || data.rhythm === "PEA" || parseInt(data.jcs) >= 300;
+      setEdits({
+        chiefComplaint: isCPA ? "院外心停止" : (data.disease || ""),
+        genbyo: "",
+        pastHistory: (data.allergy || "").includes("なし") ? "なし" : (data.allergy || ""),
+        medication: "", familyHistory: "不明",
+        smoking: "", alcohol: "", allergyText: "",
+        arrivalRhythm: "", arrivalBreathing: isCPA ? "なし" : "",
+        arrivalPupil: isCPA ? "散大固定" : "",
+        trauma: "なし", face: isCPA ? "蒼白" : "",
+        ucg: "UCG：", hospitalCourse: "", deathTime: "",
+        labResults: "", imaging: "", assessment: "",
+      });
+      setStep(1);
+    } catch (err) {
+      setError("パースエラー: " + err.message);
+    }
+  }, [rawText]);
+
+  // ---- Copy ----
+  const handleCopy = useCallback(async () => {
+    if (!outputRef.current) return;
+    const text = outputRef.current.innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(outputRef.current);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand("copy");
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, []);
+
+  // ---- Styles ----
+  const btnPrimary = {
+    background: "#2563eb", color: "#fff", border: "none",
+    padding: "12px 28px", borderRadius: 8, fontSize: 15,
+    fontWeight: 700, cursor: "pointer", width: "100%",
+    transition: "all 0.15s",
+  };
+  const btnOutline = {
+    background: "transparent", color: "#2563eb",
+    border: "2px solid #2563eb", padding: "10px 24px",
+    borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer",
+  };
+
+  // ============ RENDER ============
+  return (
+    <div style={{ minHeight: "100vh", background: "#f5f7fa", maxWidth: 640, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{
+        background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+        color: "#fff", padding: "16px 20px", position: "sticky", top: 0, zIndex: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>QR → カルテ</div>
+            <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>救急隊QRコードから電子カルテ記載を自動生成</div>
+          </div>
+          {step > 0 && (
+            <button onClick={() => { setStep(0); setParsed(null); setEdits({}); setRawText(""); setError(""); }}
+              style={{ ...btnOutline, color: "#fff", borderColor: "rgba(255,255,255,0.4)", padding: "6px 14px", fontSize: 12 }}>
+              リセット
+            </button>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          {["QR読取", "確認・編集", "カルテ出力"].map((label, i) => (
+            <div key={i} style={{
+              flex: 1, textAlign: "center", fontSize: 11, fontWeight: 600,
+              padding: "5px 0", borderRadius: 4,
+              background: step === i ? "rgba(255,255,255,0.2)" : "transparent",
+              opacity: step === i ? 1 : 0.4,
+              borderBottom: step === i ? "2px solid #60a5fa" : "2px solid transparent",
+            }}>{label}</div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "20px 16px" }}>
+
+        {/* ===== STEP 0: INPUT ===== */}
+        {step === 0 && (
+          <div>
+            <Section title="QRコード画像から読み取り">
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: "none" }} />
+              <button onClick={() => fileRef.current && fileRef.current.click()} disabled={decoding}
+                style={{ ...btnPrimary, background: decoding ? "#94a3b8" : "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/>
+                </svg>
+                {decoding ? "読み取り中..." : "QR画像を選択 / カメラ撮影"}
+              </button>
+              <div style={{ fontSize: 11, color: "#8a9aaa", marginTop: 6, textAlign: "center" }}>
+                Android Chrome: カメラ直接撮影可 / iOS: スクリーンショットを選択
+              </div>
+            </Section>
+
+            <div style={{ textAlign: "center", color: "#aaa", fontSize: 12, margin: "12px 0", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1, height: 1, background: "#ddd" }} />
+              または
+              <div style={{ flex: 1, height: 1, background: "#ddd" }} />
+            </div>
+
+            <Section title="QRデータを直接貼り付け">
+              <textarea value={rawText} onChange={e => setRawText(e.target.value)}
+                placeholder="QRコードの内容をここに貼り付け..." rows={5}
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "10px 12px",
+                  border: "1px solid #d0d7de", borderRadius: 6, fontSize: 13,
+                  fontFamily: "monospace", background: "#fff", color: "#1a1a2e", resize: "vertical",
+                }} />
+            </Section>
+
+            {error && (
+              <div style={{
+                background: "#fef2f2", border: "1px solid #fca5a5",
+                borderRadius: 8, padding: "10px 14px", color: "#b91c1c",
+                fontSize: 13, marginBottom: 12, whiteSpace: "pre-wrap",
+              }}>{error}</div>
+            )}
+
+            <button onClick={handleParse} disabled={!rawText.trim()}
+              style={{ ...btnPrimary, opacity: rawText.trim() ? 1 : 0.4, marginTop: 8 }}>
+              データ解析 →
+            </button>
+          </div>
+        )}
+
+        {/* ===== STEP 1: REVIEW & EDIT ===== */}
+        {step === 1 && parsed && (
+          <div>
+            {/* Patient card */}
+            <div style={{
+              background: "#fff", borderRadius: 10, padding: 16,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16,
+              borderLeft: "4px solid #2563eb",
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#1a1a2e", marginBottom: 2 }}>
+                {parsed.nameKanji || "氏名不明"}
+                <span style={{ fontSize: 12, fontWeight: 400, color: "#6b7a8a", marginLeft: 8 }}>{parsed.nameKana}</span>
+              </div>
+              <div style={{ fontSize: 13, color: "#4a5a6a" }}>
+                {parsed.age}歳 {parsed.sex}　{parsed.dobFormatted}生
+              </div>
+              <div style={{
+                display: "inline-block", marginTop: 8,
+                background: "#dc2626", color: "#fff",
+                padding: "3px 10px", borderRadius: 4, fontSize: 12, fontWeight: 700,
+              }}>
+                {parsed.disease || parsed.rhythm}
+              </div>
+            </div>
+
+            {/* Timeline card */}
+            <div style={{ background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6a7a", marginBottom: 8 }}>タイムライン</div>
+              <InfoRow label="覚知" value={parsed.kakuchi.hm} />
+              <InfoRow label="現着" value={parsed.genChaku.hm + "（" + parsed.squadName + "）"} />
+              <InfoRow label="現発" value={parsed.genPatsu.hm} />
+              <InfoRow label="病着" value={parsed.byoChaku.hm} />
+              <InfoRow label="心電図" value={parsed.rhythm} />
+              <InfoRow label="JCS" value={parsed.jcs} />
+              {parsed.memoFamily && <InfoRow label="関係者" value={parsed.memoFamily} />}
+              <InfoRow label="通報者" value={parsed.reporter} />
+            </div>
+
+            {/* Editable fields */}
+            <div style={{ background: "#fff", borderRadius: 10, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#5a6a7a", marginBottom: 12 }}>カルテ記載内容（編集可能）</div>
+
+              <Field label="【主訴】" value={edits.chiefComplaint || ""} onChange={v => updateEdit("chiefComplaint", v)} placeholder="例：目撃のある院外心停止" />
+              <Field label="【現病歴】" value={edits.genbyo || buildGenbyo()} onChange={v => updateEdit("genbyo", v)} rows={18} />
+              <Field label="【既往歴】" value={edits.pastHistory || ""} onChange={v => updateEdit("pastHistory", v)} placeholder="なし" />
+              <Field label="【服薬歴】" value={edits.medication || ""} onChange={v => updateEdit("medication", v)} placeholder="なし" />
+              <Field label="【家族歴】" value={edits.familyHistory || ""} onChange={v => updateEdit("familyHistory", v)} placeholder="不明" />
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1 }}><Field label="喫煙" value={edits.smoking || ""} onChange={v => updateEdit("smoking", v)} /></div>
+                <div style={{ flex: 1 }}><Field label="飲酒" value={edits.alcohol || ""} onChange={v => updateEdit("alcohol", v)} /></div>
+              </div>
+              <Field label="アレルギー" value={edits.allergyText || ""} onChange={v => updateEdit("allergyText", v)} />
+              <Field label="【現症】来院時リズム" value={edits.arrivalRhythm || ""} onChange={v => updateEdit("arrivalRhythm", v)} placeholder="例：PEA" />
+              <Field label="UCG" value={edits.ucg || ""} onChange={v => updateEdit("ucg", v)} placeholder="UCG：心嚢液なし、壁運動なし" />
+              <Field label="【経過】" value={edits.hospitalCourse || ""} onChange={v => updateEdit("hospitalCourse", v)} rows={8} placeholder="院内での処置・経過を記載..." />
+              <Field label="死亡確認時刻" value={edits.deathTime || ""} onChange={v => updateEdit("deathTime", v)} placeholder="例：15時43分　死亡確認" />
+              <Field label="【検査所見】" value={edits.labResults || ""} onChange={v => updateEdit("labResults", v)} rows={5} placeholder="BGA, 血算など" />
+              <Field label="画像検査" value={edits.imaging || ""} onChange={v => updateEdit("imaging", v)} rows={4} placeholder="＜Ai-CT＞" />
+              <Field label="【Assessment/Plan】" value={edits.assessment || ""} onChange={v => updateEdit("assessment", v)} rows={3} />
+            </div>
+
+            <button onClick={() => setStep(2)} style={btnPrimary}>カルテ文書を生成 →</button>
+          </div>
+        )}
+
+        {/* ===== STEP 2: OUTPUT ===== */}
+        {step === 2 && parsed && (
+          <div>
+            <div style={{ position: "sticky", top: 80, zIndex: 5, display: "flex", gap: 8, marginBottom: 16 }}>
+              <button onClick={handleCopy}
+                style={{ ...btnPrimary, background: copied ? "#16a34a" : "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                {copied ? "✓ コピーしました" : "クリップボードにコピー"}
+              </button>
+              <button onClick={() => setStep(1)} style={{ ...btnOutline, whiteSpace: "nowrap" }}>← 編集</button>
+            </div>
+
+            <div ref={outputRef} style={{
+              background: "#fff", borderRadius: 10, padding: "20px 16px",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              fontSize: 14, lineHeight: 1.8, color: "#1a1a2e",
+              whiteSpace: "pre-wrap", wordBreak: "break-all",
+            }}>
+              {generateKarte(parsed, edits)}
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <button onClick={handleCopy} style={btnPrimary}>
+                {copied ? "✓ コピー済み" : "コピー"}
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
