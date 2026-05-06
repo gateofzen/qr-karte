@@ -22,118 +22,85 @@
 <script>var React=window.React,ReactDOM=window.ReactDOM,useState=React.useState,useRef=React.useRef,useEffect=React.useEffect,ce=React.createElement;
 var TEST_DATA="MiwyMDI2LzA0LzExIDE1OjU0OjI5LGxpbFlrZG41a1haTU10zrgyYWVwYVd3L3dVY0lqeEpaZ1ZqN21jOW1QYnhPRnVWWGpDZlpKMm50NXdZdWc4c3VCb01URjcwQjZORlc0YXVvMURFRVpRSFE4NjAxampSZ1o1zrhEVXVFZktlTXlUZkhvUllaOEIsLOilv+adkeOAgOmbquaenc6444OL44K344Og44Op44CA44Om44Kt44KoLDIsLOOBquOBl+OAgSwsMTTmmYI0MOWIhumgg+OAgeOBhuOBquOCiuWjsOOCkuOBguOBkuOBpuOCveODleOCoeOBq+aoquOBq+OBquOBo+OBpuOBhOOBn+OAgjE05pmCNTDliIbpoIPjgIFDUEHjgpLlpKvjgYznorroqo3jgIFCUyBDUFLplovlp4vjgILmnIDntYIxNOaZgjM35YiG6aCD44CCNOaXpeWJjeOBi+OCieiDg+OBruiqv+WtkOOBjOaCquOBhOOAgeWYlOWQkDHlm57jgYLjgaPjgZ/jgajjga7jgZPjgajjgIIgIOWkseemge+8muOBquOBlyAwQEA8bWVtbz5A5aSr6KW/5p2R44CA5q2j77yI44Gr44GX44KA44KJ44CA44Gf44Gg44GX77yJQOW/g+mbu+Wbs++8mkFzeXN0b2xlLENQQSwsLDE5NTMxMjIxLDcyLDMwMCwsLCwsLDAsMCwsLDIwMjYvMDQvMTEgMTQ6NDQ6MjEsMjAyNi8wNC8xMSAxNDo1ODoyMSwyMDI2LzA0LzExIDE1OjI0LDIwMjYvMDQvMTEgMTU6Mjks6KW/77yVLDEsLOiouueZguenkSwsLDIwMjYvMDQvMTEgMTU6MDAsLCwsLCwsLCwsLDAyMTIsMSxBc3lzdG9sZSwwLDAsLHsiY29tIjoiIs64ImNwc3MiOiIizrgibHZvIjoiIs64Im1jbyI6IiLOuCJ2c3QiOiIyMDI2LzA0LzExIDE1OjE1OjA5In0s5ZCM5bGF44Gu5aSrLCw=";
 function decodeQRFromImage(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(e){var img=new Image();img.onload=function(){
-  // Helper: run jsQR on imageData
-  function tryDecode(imageData,w,h){
-    return jsQR(imageData.data,w,h,{inversionAttempts:"attemptBoth"});
-  }
-  // Helper: get imageData at given scale, optionally with threshold
-  function getImageData(scale,thresh){
+  function tryJsQR(imgData,w,h){return jsQR(imgData.data,w,h,{inversionAttempts:"attemptBoth"});}
+  function getCanvas(scale,opts){
+    opts=opts||{};
     var cw=Math.round(img.width*scale),ch=Math.round(img.height*scale);
     var c=document.createElement("canvas");c.width=cw;c.height=ch;
     var ctx=c.getContext("2d");
+    ctx.imageSmoothingEnabled=!opts.nearest;
     ctx.drawImage(img,0,0,cw,ch);
     var d=ctx.getImageData(0,0,cw,ch);
-    if(typeof thresh==="number"){
-      for(var j=0;j<d.data.length;j+=4){
-        var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);
-        v=v<thresh?0:255;
-        d.data[j]=d.data[j+1]=d.data[j+2]=v;
+    if(opts.sharpen){
+      var k=[-1,-1,-1,-1,9,-1,-1,-1,-1];
+      var out=ctx.createImageData(cw,ch);
+      for(var y=1;y<ch-1;y++)for(var x=1;x<cw-1;x++){
+        for(var ch2=0;ch2<3;ch2++){var sum=0;for(var ky=-1;ky<=1;ky++)for(var kx=-1;kx<=1;kx++){sum+=d.data[((y+ky)*cw+(x+kx))*4+ch2]*k[(ky+1)*3+(kx+1)];}
+        out.data[(y*cw+x)*4+ch2]=Math.max(0,Math.min(255,sum));}
+        out.data[(y*cw+x)*4+3]=255;
       }
+      d=out;
+    }
+    if(typeof opts.thresh==="number"){
+      for(var j=0;j<d.data.length;j+=4){var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);v=v<opts.thresh?0:255;d.data[j]=d.data[j+1]=d.data[j+2]=v;}
     }
     return{data:d,w:cw,h:ch};
   }
-  // Helper: crop a region and try to decode
-  function tryCrop(x1,y1,x2,y2,thresh){
-    var cw=x2-x1,ch=y2-y1;
-    if(cw<50||ch<50)return null;
-    var c=document.createElement("canvas");c.width=cw;c.height=ch;
-    var ctx=c.getContext("2d");
-    ctx.drawImage(img,x1,y1,cw,ch,0,0,cw,ch);
-    var d=ctx.getImageData(0,0,cw,ch);
-    if(typeof thresh==="number"){
-      for(var j=0;j<d.data.length;j+=4){
-        var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);
-        v=v<thresh?0:255;
-        d.data[j]=d.data[j+1]=d.data[j+2]=v;
-      }
-    }
-    return jsQR(d.data,cw,ch,{inversionAttempts:"attemptBoth"});
+  function tryCrop(x1,y1,x2,y2,opts){
+    opts=opts||{};
+    var cw=x2-x1,ch2=y2-y1;if(cw<50||ch2<50)return null;
+    var c=document.createElement("canvas");c.width=cw;c.height=ch2;
+    var ctx=c.getContext("2d");ctx.drawImage(img,x1,y1,cw,ch2,0,0,cw,ch2);
+    var d=ctx.getImageData(0,0,cw,ch2);
+    if(typeof opts.thresh==="number"){for(var j=0;j<d.data.length;j+=4){var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);v=v<opts.thresh?0:255;d.data[j]=d.data[j+1]=d.data[j+2]=v;}}
+    return jsQR(d.data,cw,ch2,{inversionAttempts:"attemptBoth"});
   }
 
-  // Phase 1: Try raw image at different scales
-  var scales=[1,0.75,0.5,1.5,2];
+  // Phase 1: Raw + sharpen at multiple scales (includes small image support)
+  var scales=[1,1.25,1.5,0.75,2,0.5,3];
   for(var i=0;i<scales.length;i++){
-    var r1=getImageData(scales[i]);
-    var code=tryDecode(r1.data,r1.w,r1.h);
+    var r1=getCanvas(scales[i]);
+    var code=tryJsQR(r1.data,r1.w,r1.h);
     if(code){res({data:code.data,scale:scales[i],method:"raw"});return;}
+    // Try sharpened version
+    var r1s=getCanvas(scales[i],{sharpen:true});
+    var code1s=tryJsQR(r1s.data,r1s.w,r1s.h);
+    if(code1s){res({data:code1s.data,scale:scales[i],method:"sharpen"});return;}
   }
 
-  // Phase 2: Try with grayscale threshold
+  // Phase 2: Threshold binarization
   var thresholds=[128,100,150,180,80];
-  for(var s=0;s<2;s++){
-    var sc=[1,0.75][s];
+  for(var s=0;s<3;s++){
+    var sc=[1,1.5,2][s];
     for(var t=0;t<thresholds.length;t++){
-      var r2=getImageData(sc,thresholds[t]);
-      var code2=tryDecode(r2.data,r2.w,r2.h);
+      var r2=getCanvas(sc,{thresh:thresholds[t]});
+      var code2=tryJsQR(r2.data,r2.w,r2.h);
       if(code2){res({data:code2.data,scale:sc,method:"thresh"+thresholds[t]});return;}
     }
   }
 
-  // Phase 3: Auto-detect white QR region and crop
-  // Scan the image for the brightest rectangular area
+  // Phase 3: Auto-detect bright region and crop
   var scanScale=0.25;
   var sw=Math.round(img.width*scanScale),sh=Math.round(img.height*scanScale);
-  var sc=document.createElement("canvas");sc.width=sw;sc.height=sh;
-  var sctx=sc.getContext("2d");
-  sctx.drawImage(img,0,0,sw,sh);
+  var sc2=document.createElement("canvas");sc2.width=sw;sc2.height=sh;
+  var sctx=sc2.getContext("2d");sctx.drawImage(img,0,0,sw,sh);
   var sd=sctx.getImageData(0,0,sw,sh);
-  // Find bright columns and rows
-  var colBright=new Float32Array(sw);
-  var rowBright=new Float32Array(sh);
-  for(var y=0;y<sh;y++){for(var x=0;x<sw;x++){
-    var idx=(y*sw+x)*4;
-    var lum=(sd.data[idx]+sd.data[idx+1]+sd.data[idx+2])/3;
-    colBright[x]+=lum;rowBright[y]+=lum;
-  }}
-  for(var x=0;x<sw;x++)colBright[x]/=sh;
-  for(var y=0;y<sh;y++)rowBright[y]/=sw;
-  // Find brightest contiguous region (>150 average)
-  function findBrightRange(arr,minBright){
-    var best={start:0,end:arr.length-1,score:0};
-    var start=-1;
-    for(var i=0;i<arr.length;i++){
-      if(arr[i]>minBright){if(start<0)start=i;}
-      else{if(start>=0){var len=i-start;if(len>best.score){best={start:start,end:i-1,score:len};}start=-1;}}
-    }
-    if(start>=0){var len2=arr.length-start;if(len2>best.score)best={start:start,end:arr.length-1,score:len2};}
-    return best;
-  }
-  var xRange=findBrightRange(colBright,100);
-  var yRange=findBrightRange(rowBright,100);
-  if(xRange.score>10&&yRange.score>10){
-    var cx1=Math.max(0,Math.round(xRange.start/scanScale)-20);
-    var cy1=Math.max(0,Math.round(yRange.start/scanScale)-20);
-    var cx2=Math.min(img.width,Math.round(xRange.end/scanScale)+20);
-    var cy2=Math.min(img.height,Math.round(yRange.end/scanScale)+20);
-    // Try crop at various thresholds
-    for(var t2=0;t2<thresholds.length;t2++){
-      var code3=tryCrop(cx1,cy1,cx2,cy2,thresholds[t2]);
-      if(code3){res({data:code3.data,scale:1,method:"crop+thresh"+thresholds[t2]});return;}
-    }
-    var code3b=tryCrop(cx1,cy1,cx2,cy2);
-    if(code3b){res({data:code3b.data,scale:1,method:"crop"});return;}
+  var colB=new Float32Array(sw),rowB=new Float32Array(sh);
+  for(var y=0;y<sh;y++)for(var x=0;x<sw;x++){var idx=(y*sw+x)*4;var lum=(sd.data[idx]+sd.data[idx+1]+sd.data[idx+2])/3;colB[x]+=lum;rowB[y]+=lum;}
+  for(var x=0;x<sw;x++)colB[x]/=sh;for(var y=0;y<sh;y++)rowB[y]/=sw;
+  function findRange(arr,minB){var best={s:0,e:arr.length-1,sc:0},start=-1;for(var i=0;i<arr.length;i++){if(arr[i]>minB){if(start<0)start=i;}else{if(start>=0){var len=i-start;if(len>best.sc)best={s:start,e:i-1,sc:len};start=-1;}}}if(start>=0){var l2=arr.length-start;if(l2>best.sc)best={s:start,e:arr.length-1,sc:l2};}return best;}
+  var xR=findRange(colB,100),yR=findRange(rowB,100);
+  if(xR.sc>10&&yR.sc>10){
+    var cx1=Math.max(0,Math.round(xR.s/scanScale)-20),cy1=Math.max(0,Math.round(yR.s/scanScale)-20);
+    var cx2=Math.min(img.width,Math.round(xR.e/scanScale)+20),cy2=Math.min(img.height,Math.round(yR.e/scanScale)+20);
+    for(var t2=0;t2<thresholds.length;t2++){var c3=tryCrop(cx1,cy1,cx2,cy2,{thresh:thresholds[t2]});if(c3){res({data:c3.data,scale:1,method:"crop+thresh"});return;}}
+    var c3b=tryCrop(cx1,cy1,cx2,cy2);if(c3b){res({data:c3b.data,scale:1,method:"crop"});return;}
   }
 
-  // Phase 4: Try subdividing image into quadrants
+  // Phase 4: Quadrant scanning
   var qw=img.width/2,qh=img.height/2;
-  var quads=[[0,0,img.width,qh],[0,qh,img.width,img.height],[0,0,qw,img.height],[qw,0,img.width,img.height],
-             [qw*0.3,qh*0.3,qw*1.7,qh*1.7]];
-  for(var q=0;q<quads.length;q++){
-    var code4=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3]);
-    if(code4){res({data:code4.data,scale:1,method:"quad"+q});return;}
-    var code4b=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3],128);
-    if(code4b){res({data:code4b.data,scale:1,method:"quad"+q+"+thresh"});return;}
-  }
+  var quads=[[0,0,img.width,qh],[0,qh,img.width,img.height],[0,0,qw,img.height],[qw,0,img.width,img.height],[qw*0.3,qh*0.3,qw*1.7,qh*1.7]];
+  for(var q=0;q<quads.length;q++){var c4=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3]);if(c4){res({data:c4.data,scale:1,method:"quad"});return;}var c4b=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3],{thresh:128});if(c4b){res({data:c4b.data,scale:1,method:"quad+thresh"});return;}}
 
   rej(new Error("QR\u691C\u51FA\u5931\u6557\u3002QR\u30B3\u30FC\u30C9\u90E8\u5206\u3092\u62E1\u5927\u3057\u305F\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u3067\u518D\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002"));
 };img.onerror=function(){rej(new Error("\u753B\u50CF\u8AAD\u307F\u8FBC\u307F\u5931\u6557"));};img.src=e.target.result;};r.readAsDataURL(file);})}
