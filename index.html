@@ -77,6 +77,7 @@ function zbarDecode(rgbaData,w,h){
 <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script>var React=window.React,ReactDOM=window.ReactDOM,useState=React.useState,useRef=React.useRef,useEffect=React.useEffect,ce=React.createElement;
 var TEST_DATA="MiwyMDI2LzA0LzExIDE1OjU0OjI5LGxpbFlrZG41a1haTU10zrgyYWVwYVd3L3dVY0lqeEpaZ1ZqN21jOW1QYnhPRnVWWGpDZlpKMm50NXdZdWc4c3VCb01URjcwQjZORlc0YXVvMURFRVpRSFE4NjAxampSZ1o1zrhEVXVFZktlTXlUZkhvUllaOEIsLOilv+adkeOAgOmbquaenc6444OL44K344Og44Op44CA44Om44Kt44KoLDIsLOOBquOBl+OAgSwsMTTmmYI0MOWIhumgg+OAgeOBhuOBquOCiuWjsOOCkuOBguOBkuOBpuOCveODleOCoeOBq+aoquOBq+OBquOBo+OBpuOBhOOBn+OAgjE05pmCNTDliIbpoIPjgIFDUEHjgpLlpKvjgYznorroqo3jgIFCUyBDUFLplovlp4vjgILmnIDntYIxNOaZgjM35YiG6aCD44CCNOaXpeWJjeOBi+OCieiDg+OBruiqv+WtkOOBjOaCquOBhOOAgeWYlOWQkDHlm57jgYLjgaPjgZ/jgajjga7jgZPjgajjgIIgIOWkseemge+8muOBquOBlyAwQEA8bWVtbz5A5aSr6KW/5p2R44CA5q2j77yI44Gr44GX44KA44KJ44CA44Gf44Gg44GX77yJQOW/g+mbu+Wbs++8mkFzeXN0b2xlLENQQSwsLDE5NTMxMjIxLDcyLDMwMCwsLCwsLDAsMCwsLDIwMjYvMDQvMTEgMTQ6NDQ6MjEsMjAyNi8wNC8xMSAxNDo1ODoyMSwyMDI2LzA0LzExIDE1OjI0LDIwMjYvMDQvMTEgMTU6Mjks6KW/77yVLDEsLOiouueZguenkSwsLDIwMjYvMDQvMTEgMTU6MDAsLCwsLCwsLCwsLDAyMTIsMSxBc3lzdG9sZSwwLDAsLHsiY29tIjoiIs64ImNwc3MiOiIizrgibHZvIjoiIs64Im1jbyI6IiLOuCJ2c3QiOiIyMDI2LzA0LzExIDE1OjE1OjA5In0s5ZCM5bGF44Gu5aSrLCw=";
+
 function decodeQRFromImage(file){
   return new Promise(function(resolve,reject){
     var r=new FileReader();
@@ -89,7 +90,7 @@ function decodeQRFromImage(file){
           var c=document.createElement("canvas");c.width=cw;c.height=ch;
           var ctx=c.getContext("2d");ctx.imageSmoothingEnabled=!opts.nearest;
           ctx.drawImage(img,0,0,cw,ch);var d=ctx.getImageData(0,0,cw,ch);
-          if(opts.sharpen){var k=[-1,-1,-1,-1,9,-1,-1,-1,-1];var out=new ImageData(cw,ch);for(var y=1;y<ch-1;y++)for(var x=1;x<cw-1;x++){for(var p=0;p<3;p++){var sum=0;for(var ky=-1;ky<=1;ky++)for(var kx=-1;kx<=1;kx++){sum+=d.data[((y+ky)*cw+(x+kx))*4+p]*k[(ky+1)*3+(kx+1)];}out.data[(y*cw+x)*4+p]=Math.max(0,Math.min(255,sum));}out.data[(y*cw+x)*4+3]=255;}d=out;}
+          if(opts.sharpen){var k=[-1,-1,-1,-1,9,-1,-1,-1,-1];var out=new ImageData(cw,ch);for(var y=1;y<ch-1;y++){for(var x=1;x<cw-1;x++){for(var p=0;p<3;p++){var sum=0;for(var ky=-1;ky<=1;ky++){for(var kx=-1;kx<=1;kx++){sum+=d.data[((y+ky)*cw+(x+kx))*4+p]*k[(ky+1)*3+(kx+1)];}}out.data[(y*cw+x)*4+p]=Math.max(0,Math.min(255,sum));}out.data[(y*cw+x)*4+3]=255;}}d=out;}
           if(typeof opts.thresh==="number"){for(var j=0;j<d.data.length;j+=4){var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);v=v<opts.thresh?0:255;d.data[j]=d.data[j+1]=d.data[j+2]=v;}}
           return{data:d,w:cw,h:ch};
         }
@@ -101,43 +102,40 @@ function decodeQRFromImage(file){
           if(typeof opts.thresh==="number"){for(var j=0;j<d.data.length;j+=4){var v=Math.round(d.data[j]*0.299+d.data[j+1]*0.587+d.data[j+2]*0.114);v=v<opts.thresh?0:255;d.data[j]=d.data[j+1]=d.data[j+2]=v;}}
           return tryJsQR(d,cw,ch);
         }
-        // Phase 1: jsQR raw + sharpen
         var scales=[1,1.25,1.5,0.75,2,0.5,3];
-        for(var i=0;i<scales.length;i++){
-          var r1=getCanvas(scales[i]);var code=tryJsQR(r1.data,r1.w,r1.h);
-          if(code){resolve({data:code.data,scale:scales[i],method:"raw"});return;}
-          var r1s=getCanvas(scales[i],{sharpen:true});var cs=tryJsQR(r1s.data,r1s.w,r1s.h);
-          if(cs){resolve({data:cs.data,scale:scales[i],method:"sharpen"});return;}
-        }
-        // Phase 2: jsQR threshold
         var thresholds=[128,100,150,180,80];
-        for(var s=0;s<3;s++){var sc=[1,1.5,2][s];for(var t=0;t<thresholds.length;t++){var r2=getCanvas(sc,{thresh:thresholds[t]});var c2=tryJsQR(r2.data,r2.w,r2.h);if(c2){resolve({data:c2.data,scale:sc,method:"thresh"+thresholds[t]});return;}}}
-        // Phase 3: jsQR auto-crop
+        var i,s,t,code;
+        // Phase 1
+        for(i=0;i<scales.length;i++){
+          var r1=getCanvas(scales[i]);code=tryJsQR(r1.data,r1.w,r1.h);
+          if(code){resolve({data:code.data,method:"raw"});return;}
+          var r1s=getCanvas(scales[i],{sharpen:true});code=tryJsQR(r1s.data,r1s.w,r1s.h);
+          if(code){resolve({data:code.data,method:"sharpen"});return;}
+        }
+        // Phase 2
+        for(s=0;s<3;s++){var sc=[1,1.5,2][s];for(t=0;t<thresholds.length;t++){var r2=getCanvas(sc,{thresh:thresholds[t]});code=tryJsQR(r2.data,r2.w,r2.h);if(code){resolve({data:code.data,method:"thresh"});return;}}}
+        // Phase 3
         var scanScale=0.25;var sw=Math.round(img.width*scanScale),sh=Math.round(img.height*scanScale);
         var sc2=document.createElement("canvas");sc2.width=sw;sc2.height=sh;var sctx=sc2.getContext("2d");sctx.drawImage(img,0,0,sw,sh);var sd=sctx.getImageData(0,0,sw,sh);
         var colB=new Float32Array(sw),rowB=new Float32Array(sh);
-        for(var y=0;y<sh;y++)for(var x=0;x<sw;x++){var idx=(y*sw+x)*4;var lum=(sd.data[idx]+sd.data[idx+1]+sd.data[idx+2])/3;colB[x]+=lum;rowB[y]+=lum;}
-        for(var x=0;x<sw;x++)colB[x]/=sh;for(var y=0;y<sh;y++)rowB[y]/=sw;
-        function findRange(arr,minB){var best={s:0,e:arr.length-1,sc:0},start=-1;for(var i=0;i<arr.length;i++){if(arr[i]>minB){if(start<0)start=i;}else{if(start>=0){var len=i-start;if(len>best.sc)best={s:start,e:i-1,sc:len};start=-1;}}}if(start>=0){var l2=arr.length-start;if(l2>best.sc)best={s:start,e:arr.length-1,sc:l2};}return best;}
+        for(var y=0;y<sh;y++){for(var x=0;x<sw;x++){var idx2=(y*sw+x)*4;var lum=(sd.data[idx2]+sd.data[idx2+1]+sd.data[idx2+2])/3;colB[x]+=lum;rowB[y]+=lum;}}
+        for(x=0;x<sw;x++)colB[x]/=sh;for(y=0;y<sh;y++)rowB[y]/=sw;
+        function findRange(arr,minB){var best={s:0,e:arr.length-1,sc:0},start=-1;for(var ii=0;ii<arr.length;ii++){if(arr[ii]>minB){if(start<0)start=ii;}else{if(start>=0){var len=ii-start;if(len>best.sc){best={s:start,e:ii-1,sc:len};}start=-1;}}}if(start>=0){var l2=arr.length-start;if(l2>best.sc)best={s:start,e:arr.length-1,sc:l2};}return best;}
         var xR=findRange(colB,100),yR=findRange(rowB,100);
         if(xR.sc>10&&yR.sc>10){var cx1=Math.max(0,Math.round(xR.s/scanScale)-20),cy1=Math.max(0,Math.round(yR.s/scanScale)-20),cx2=Math.min(img.width,Math.round(xR.e/scanScale)+20),cy2=Math.min(img.height,Math.round(yR.e/scanScale)+20);
-          for(var t2=0;t2<thresholds.length;t2++){var c3=tryCrop(cx1,cy1,cx2,cy2,{thresh:thresholds[t2]});if(c3){resolve({data:c3.data,scale:1,method:"crop+thresh"});return;}}
-          var c3b=tryCrop(cx1,cy1,cx2,cy2);if(c3b){resolve({data:c3b.data,scale:1,method:"crop"});return;}}
-        // Phase 4: jsQR quadrants
+          for(t=0;t<thresholds.length;t++){code=tryCrop(cx1,cy1,cx2,cy2,{thresh:thresholds[t]});if(code){resolve({data:code.data,method:"crop"});return;}}
+          code=tryCrop(cx1,cy1,cx2,cy2);if(code){resolve({data:code.data,method:"crop"});return;}}
+        // Phase 4
         var qw=img.width/2,qh=img.height/2;
         var quads=[[0,0,img.width,qh],[0,qh,img.width,img.height],[0,0,qw,img.height],[qw,0,img.width,img.height],[qw*0.3,qh*0.3,qw*1.7,qh*1.7]];
-        for(var q=0;q<quads.length;q++){var c4=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3]);if(c4){resolve({data:c4.data,scale:1,method:"quad"});return;}var c4b=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3],{thresh:128});if(c4b){resolve({data:c4b.data,scale:1,method:"quad+thresh"});return;}}
-        // Phase 5: zbar-wasm fallback (embedded)
+        for(var q=0;q<quads.length;q++){code=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3]);if(code){resolve({data:code.data,method:"quad"});return;}code=tryCrop(quads[q][0],quads[q][1],quads[q][2],quads[q][3],{thresh:128});if(code){resolve({data:code.data,method:"quad"});return;}}
+        // Phase 5: zbar
         if(typeof zbarDecode==="function"){
           var fbScales=[1,1.5,2,3];var fi=0;
           function tryZbar(){
             if(fi>=fbScales.length){reject(new Error("QR\u691C\u51FA\u5931\u6557"));return;}
-            var sc=fbScales[fi];fi++;
-            var r5=getCanvas(sc);
-            zbarDecode(r5.data.data,r5.w,r5.h).then(function(text){
-              if(text){resolve({data:text,scale:sc,method:"zbar"});}
-              else{tryZbar();}
-            }).catch(function(){tryZbar();});
+            var fsc=fbScales[fi];fi++;var r5=getCanvas(fsc);
+            zbarDecode(r5.data.data,r5.w,r5.h).then(function(text){if(text){resolve({data:text,method:"zbar"});}else{tryZbar();}}).catch(function(){tryZbar();});
           }
           tryZbar();
         }else{reject(new Error("QR\u691C\u51FA\u5931\u6557"));}
@@ -148,38 +146,210 @@ function decodeQRFromImage(file){
     r.readAsDataURL(file);
   });
 }
+
 function decodeQRRaw(raw){var t=raw.trim();try{var b=atob(t),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);var csv=new TextDecoder("utf-8").decode(u);if(/^\d/.test(csv)&&csv.includes(","))return{csv:csv,method:"base64"};}catch(e){}if(t.includes(",")&&/[\u3000-\u9FFF]/.test(t))return{csv:t,method:"direct"};return{csv:t,method:"unknown"};}
 function parseCSV(csv){var p=csv,jbs=[],re=/\{[^}]*\}/g,m;while((m=re.exec(csv))!==null){jbs.push(m[0]);p=p.replace(m[0],"__J"+(jbs.length-1)+"__");}var parts=p.split(",");return parts.map(function(x){var v=x;jbs.forEach(function(jb,i){v=v.replace("__J"+i+"__",jb);});return v;});}
-function extractFields(parts){var nr=parts[4]||"",np=nr.split("\u03b8"),nK=(np[0]||"").trim(),nR=(np[1]||"").trim();var narr=parts[9]||"",mn=narr,mf="",me="";var mi=narr.indexOf("@@<memo>");if(mi>=0){mn=narr.substring(0,mi).replace(/\s*0\s*$/,"").trim();narr.substring(mi+8).split("@").filter(Boolean).forEach(function(p){if(p.indexOf("\u5FC3\u96FB\u56F3")>=0)me=p.replace(/\u5FC3\u96FB\u56F3[\uFF1A:]/,"").trim();else mf=p.trim();});}var dob=parts[13]||"";var dobF=dob.length===8?dob.substring(0,4)+"\u5E74"+parseInt(dob.substring(4,6))+"\u6708"+parseInt(dob.substring(6,8))+"\u65E5":"";function pT(t){if(!t)return{full:"",hm:""};var m=(t||"").match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})/);if(!m)return{full:t,hm:""};return{full:t,hm:parseInt(m[4])+"\u6642"+m[5]+"\u5206"};}var sqRaw=(parts[29]||"").replace(/[\uFF10-\uFF19]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);});var sqPrefix=sqRaw.replace(/[0-9]/g,"");var sex=parts[5]==="1"?"\u7537\u6027":parts[5]==="2"?"\u5973\u6027":"";var medication=parts[12]||"";var rhythm=parts[48]||me||"";var isCPA=(parts[10]||"").indexOf("CPA")>=0||["Asystole","VF","VT","PEA","pVT"].indexOf(rhythm)>=0||parseInt(parts[15])>=300;return{nameKanji:nK,nameKana:nR,sex:sex,age:parts[14]||"",dobFormatted:dobF,jcs:parts[15]||"",rhythm:rhythm,disease:parts[10]||"",reporter:parts[53]||"",allergy:parts[7]||"",medication:medication,mainNarrative:mn,memoFamily:mf,kakuchi:pT(parts[25]),genChaku:pT(parts[26]),sessoku:pT(parts[35]),byoChaku:pT(parts[28]),genPatsu:pT(parts[27]),squadName:sqRaw,squadPrefix:sqPrefix,bp_sys:parts[19]||"",bp_dia:parts[20]||"",hr:parts[21]||"",rr:parts[22]||"",bt:parts[23]||"",spo2:parts[24]||"",isCPA:isCPA,fieldCount:parts.length};}
-function Field(p){var r=p.rows||1;var s={width:"100%",boxSizing:"border-box",padding:"8px 10px",border:"1px solid #d0d7de",borderRadius:6,fontSize:14,fontFamily:"'Noto Sans JP',sans-serif",background:"#fff",color:"#1a1a2e"};return ce("div",{style:{marginBottom:10}},p.label&&ce("label",{style:{display:"block",fontSize:12,fontWeight:600,color:"#3a4a5a",marginBottom:3}},p.label),r>1?ce("textarea",{value:p.value,onChange:function(e){p.onChange(e.target.value)},rows:r,placeholder:p.placeholder,style:Object.assign({},s,{resize:"vertical",lineHeight:1.6})}):ce("input",{type:"text",value:p.value,onChange:function(e){p.onChange(e.target.value)},placeholder:p.placeholder,style:Object.assign({},s,{height:38})}));}
+function extractFields(parts){var nr=parts[4]||"",np=nr.split("\u03b8"),nK=(np[0]||"").trim(),nR=(np[1]||"").trim();var narr=parts[9]||"",mn=narr,mf="",me="";var mi=narr.indexOf("@@<memo>");if(mi>=0){mn=narr.substring(0,mi).replace(/\s*0\s*$/,"").trim();narr.substring(mi+8).split("@").filter(Boolean).forEach(function(p){if(p.indexOf("\u5FC3\u96FB\u56F3")>=0)me=p.replace(/\u5FC3\u96FB\u56F3[\uFF1A:]/,"").trim();else mf=p.trim();});}var dob=parts[13]||"";var dobF=dob.length===8?dob.substring(0,4)+"\u5E74"+parseInt(dob.substring(4,6))+"\u6708"+parseInt(dob.substring(6,8))+"\u65E5":"";function pT(t){if(!t)return{full:"",hm:""};var m2=(t||"").match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})/);if(!m2)return{full:t,hm:""};return{full:t,hm:parseInt(m2[4])+"\u6642"+m2[5]+"\u5206"};}var sqRaw=(parts[29]||"").replace(/[\uFF10-\uFF19]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);});var sqPrefix=sqRaw.replace(/[0-9]/g,"");var sex=parts[5]==="1"?"\u7537\u6027":parts[5]==="2"?"\u5973\u6027":"";var rhythm=parts[48]||me||"";var medication=parts[12]||"";var isCPA=(parts[10]||"").indexOf("CPA")>=0||["Asystole","VF","VT","PEA","pVT"].indexOf(rhythm)>=0||parseInt(parts[15])>=300;return{nameKanji:nK,nameKana:nR,sex:sex,age:parts[14]||"",dobFormatted:dobF,jcs:parts[15]||"",rhythm:rhythm,disease:parts[10]||"",reporter:parts[53]||"",allergy:parts[7]||"",medication:medication,mainNarrative:mn,memoFamily:mf,kakuchi:pT(parts[25]),genChaku:pT(parts[26]),sessoku:pT(parts[35]),byoChaku:pT(parts[28]),genPatsu:pT(parts[27]),squadName:sqRaw,squadPrefix:sqPrefix,bp_sys:parts[19]||"",bp_dia:parts[20]||"",hr:parts[21]||"",rr:parts[22]||"",bt:parts[23]||"",spo2:parts[24]||"",isCPA:isCPA,fieldCount:parts.length};}
+function Field(p){var r2=p.rows||1;var s={width:"100%",boxSizing:"border-box",padding:"8px 10px",border:"1px solid #d0d7de",borderRadius:6,fontSize:14,fontFamily:"'Noto Sans JP',sans-serif",background:"#fff",color:"#1a1a2e"};return ce("div",{style:{marginBottom:10}},p.label&&ce("label",{style:{display:"block",fontSize:12,fontWeight:600,color:"#3a4a5a",marginBottom:3}},p.label),r2>1?ce("textarea",{value:p.value,onChange:function(e){p.onChange(e.target.value);},rows:r2,placeholder:p.placeholder,style:Object.assign({},s,{resize:"vertical",lineHeight:1.6})}):ce("input",{type:"text",value:p.value,onChange:function(e){p.onChange(e.target.value);},placeholder:p.placeholder,style:Object.assign({},s,{height:38})}));}
 function InfoRow(p){if(!p.value)return null;return ce("div",{style:{display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f0f0f5"}},ce("span",{style:{fontSize:11,color:"#6b7a8a",minWidth:60}},p.label),ce("span",{style:{fontSize:14,color:"#1a1a2e",fontWeight:500}},p.value));}
-function vitalsLine(d){var items=[];if(d.jcs)items.push("JCS "+d.jcs);if(d.rr&&d.rr!=="0")items.push("RR "+d.rr);if(d.spo2&&d.spo2!=="0")items.push("SpO2 "+d.spo2+"%");if(d.hr&&d.hr!=="0")items.push("HR "+d.hr);if(d.bp_sys){var bp=d.bp_sys;if(d.bp_dia)bp+="/"+d.bp_dia;items.push("BP "+bp);}if(d.bt&&d.bt!=="0")items.push("BT "+d.bt+"\u2103");return items.length>0?items.join("  "):""}
-function addMin(hm,min){if(!hm)return"";var m=hm.match(/(\d+)\u6642(\d+)\u5206/);if(!m)return hm;var h=parseInt(m[1]),mm=parseInt(m[2])+min;if(mm>=60){h=(h+1)%24;mm-=60;}return h+"\u6642"+(mm<10?"0":"")+mm+"\u5206";}
-function App(){var _s=useState(0),step=_s[0],setStep=_s[1];var _r=useState(""),rawText=_r[0],setRawText=_r[1];var _p=useState(null),parsed=_p[0],setParsed=_p[1];var _e=useState({}),edits=_e[0],setEdits=_e[1];var _c=useState(false),copied=_c[0],setCopied=_c[1];var _er=useState(""),error=_er[0],setError=_er[1];var _d=useState(""),debug=_d[0],setDebug=_d[1];var _dc=useState(false),decoding=_dc[0],setDecoding=_dc[1];var _tp=useState(""),tplType=_tp[0],setTplType=_tp[1];var fileRef=useRef(null),outputRef=useRef(null);function ue(k,v){setEdits(function(prev){var n=Object.assign({},prev);n[k]=v;return n;});}
-useEffect(function(){function onPaste(e){if(step!==0)return;var items=e.clipboardData&&e.clipboardData.items;if(!items)return;for(var i=0;i<items.length;i++){if(items[i].type.indexOf("image")!==-1){e.preventDefault();var blob=items[i].getAsFile();if(!blob)continue;setDecoding(true);setError("");setDebug("QR\u89E3\u6790\u4E2D...");decodeQRFromImage(blob).then(function(r){setRawText(r.data);setDebug("\u8CBC\u4ED8\u753B\u50CF\u304B\u3089QR\u691C\u51FA ("+r.data.length+"\u6587\u5B57)");setDecoding(false);}).catch(function(err){setError(err.message);setDecoding(false);});return;}}}document.addEventListener("paste",onPaste);return function(){document.removeEventListener("paste",onPaste);};},[step]);
-function buildGenbyo(d){var L=[];if(d.age&&d.sex)L.push(d.age+"\u6B73"+d.sex+"\u3002");if(d.mainNarrative)L.push(d.mainNarrative);L.push("");if(d.kakuchi.hm)L.push(d.kakuchi.hm+"\u3000\u6D88\u9632\u899A\u77E5");if(d.sessoku.hm)L.push(d.sessoku.hm+"\u3000"+d.squadPrefix+"\u6551\u6025\u968A\u63A5\u89E6");L.push("");
-if(d.jcs)L.push("JCS "+d.jcs);
-if(d.rr&&d.rr!=="0")L.push("RR "+d.rr);
-if(d.spo2&&d.spo2!=="0")L.push("SpO2 "+d.spo2+"%");
-if(d.hr&&d.hr!=="0")L.push("HR "+d.hr);
-if(d.bp_sys){var bp=d.bp_sys;if(d.bp_dia)bp+="/"+d.bp_dia;L.push("BP "+bp);}
-if(d.bt&&d.bt!=="0")L.push("BT "+d.bt+"\u2103");
-L.push("");if(d.genPatsu.hm)L.push(d.genPatsu.hm+"\u3000\u73FE\u5834\u51FA\u767A");if(d.byoChaku.hm)L.push(d.byoChaku.hm+"\u3000\u75C5\u7740");return L.join("\n");}
-function genKarte(d,e,type){var L=[];L.push("\u3010\u4E3B\u8A34\u3011",e.chiefComplaint||"","","\u3010\u73FE\u75C5\u6B74\u3011",e.genbyo||"","","\u3010\u65E2\u5F80\u6B74\u3011",e.pastHistory||"","","\u3010\u670D\u85AC\u6B74\u3011",e.medication||"","","\u3010\u5BB6\u65CF\u6B74\u3011",e.familyHistory||"\u4E0D\u660E","","\u3010\u751F\u6D3B\u6B74\u3011","\u55AB\u7159\uFF1A"+(e.smoking||""),"\u98F2\u9152\uFF1A"+(e.alcohol||""),"\u30A2\u30EC\u30EB\u30AE\u30FC\uFF1A"+(e.allergyText||""),"","\u3010\u6765\u9662\u6642\u73FE\u75C7\u3011");if(type==="cpa"){L.push("\u6765\u9662\u6642"+(e.arrivalRhythm||""),"\u547C\u5438"+(e.arrivalBreathing||"\u306A\u3057"),"\u77B3\u5B54"+(e.arrivalPupil||"\u6563\u5927\u56FA\u5B9A"),"\u5916\u50B7\u6240\u898B"+(e.trauma||"\u306A\u3057"),"\u9854\u9762\u306F"+(e.face||"\u84BC\u767D"),"",e.ucg||"UCG\uFF1A");}else{L.push("JCS ","RR ","SpO2  %","HR ","BP  / ","BT  \u2103");if(e.genFindings)L.push(e.genFindings);}L.push("","","\u3010\u7D4C\u904E\u3011");if(e.arrivalLine)L.push(e.arrivalLine);if(e.hospitalCourse)L.push(e.hospitalCourse);L.push("");if(type==="cpa"&&e.deathTime){L.push(e.deathTime,"");}L.push("\u3010\u691C\u67FB\u6240\u898B\u3011",e.labResults||"","");if(e.imaging){L.push(e.imaging,"");}L.push("\u3010Assessment/Plan\u3011",e.assessment||"");return L.join("\n");}
-function handleFile(ev){var file=ev.target.files&&ev.target.files[0];if(!file)return;setDecoding(true);setError("");setDebug("QR\u89E3\u6790\u4E2D...");decodeQRFromImage(file).then(function(r){setRawText(r.data);setDebug("QR\u691C\u51FA ("+r.data.length+"\u6587\u5B57)");setDecoding(false);if(fileRef.current)fileRef.current.value="";}).catch(function(err){setError(err.message);setDecoding(false);if(fileRef.current)fileRef.current.value="";});}
-function handleParse(){if(!rawText.trim()){setError("\u30C7\u30FC\u30BF\u3092\u5165\u529B");return;}setError("");setDebug("");try{var res=decodeQRRaw(rawText),parts=parseCSV(res.csv),d=extractFields(parts);setDebug(d.nameKanji+" / "+d.squadPrefix+"\u6551\u6025\u968A / "+(d.isCPA?"CPA":"\u4E00\u822C")+(d.medication?" / \u5185\u670D:"+d.medication:""));if(!d.nameKanji&&!d.disease&&d.fieldCount<10){setError("\u6709\u52B9\u306AQR\u30C7\u30FC\u30BF\u3092\u8A8D\u8B58\u3067\u304D\u307E\u305B\u3093");return;}setParsed(d);var type=d.isCPA?"cpa":"general";setTplType(type);var cc=type==="cpa"?"\u9662\u5916\u5FC3\u505C\u6B62":(d.disease||"");var arrLine=d.byoChaku.hm?(addMin(d.byoChaku.hm,2)+"\u3000\u521D\u7642\u5BA4\u7740"):"";var e={chiefComplaint:cc,genbyo:buildGenbyo(d),pastHistory:(d.allergy||"").replace(/[,\u3001\s]+$/,""),medication:d.medication||"",familyHistory:"\u4E0D\u660E",smoking:"",alcohol:"",allergyText:"",hospitalCourse:"",labResults:"",imaging:"",assessment:"",arrivalLine:arrLine};if(type==="cpa"){e.arrivalRhythm="";e.arrivalBreathing="\u306A\u3057";e.arrivalPupil="\u6563\u5927\u56FA\u5B9A";e.trauma="\u306A\u3057";e.face="\u84BC\u767D";e.ucg="UCG\uFF1A";e.deathTime="";}else{e.genFindings="";}setEdits(e);setStep(1);}catch(err){setError("\u30D1\u30FC\u30B9\u30A8\u30E9\u30FC: "+err.message);}}
-function handleManual(){
-    var type="general";setTplType(type);
-    setParsed({nameKanji:"",nameKana:"",sex:"",age:"",dobFormatted:"",jcs:"",rhythm:"",disease:"",reporter:"",allergy:"",mainNarrative:"",memoFamily:"",kakuchi:{hm:""},genChaku:{hm:""},sessoku:{hm:""},byoChaku:{hm:""},genPatsu:{hm:""},squadName:"",squadPrefix:"",bp_sys:"",bp_dia:"",hr:"",rr:"",bt:"",spo2:"",medication:"",isCPA:false,fieldCount:0});
+function addMin(hm,min){if(!hm)return"";var m3=hm.match(/(\d+)\u6642(\d+)\u5206/);if(!m3)return hm;var h=parseInt(m3[1]),mm=parseInt(m3[2])+min;if(mm>=60){h=(h+1)%24;mm-=60;}return h+"\u6642"+(mm<10?"0":"")+mm+"\u5206";}
+
+function App(){
+  var _s=useState(0),step=_s[0],setStep=_s[1];
+  var _r=useState(""),rawText=_r[0],setRawText=_r[1];
+  var _p=useState(null),parsed=_p[0],setParsed=_p[1];
+  var _e=useState({}),edits=_e[0],setEdits=_e[1];
+  var _c=useState(false),copied=_c[0],setCopied=_c[1];
+  var _er=useState(""),error=_er[0],setError=_er[1];
+  var _d=useState(""),debug=_d[0],setDebug=_d[1];
+  var _dc=useState(false),decoding=_dc[0],setDecoding=_dc[1];
+  var _tp=useState(""),tplType=_tp[0],setTplType=_tp[1];
+  var fileRef=useRef(null),outputRef=useRef(null);
+  function ue(k,v){setEdits(function(prev){var n=Object.assign({},prev);n[k]=v;return n;});}
+
+  useEffect(function(){
+    function onPaste(e){if(step!==0)return;var items=e.clipboardData&&e.clipboardData.items;if(!items)return;for(var i=0;i<items.length;i++){if(items[i].type.indexOf("image")!==-1){e.preventDefault();var blob=items[i].getAsFile();if(!blob)continue;setDecoding(true);setError("");setDebug("QR\u89E3\u6790\u4E2D...");decodeQRFromImage(blob).then(function(r){setRawText(r.data);setDebug("\u8CBC\u4ED8\u753B\u50CF\u304B\u3089QR\u691C\u51FA ("+r.data.length+"\u6587\u5B57 "+r.method+")");setDecoding(false);}).catch(function(err){setError(err.message);setDecoding(false);});return;}}}
+    document.addEventListener("paste",onPaste);return function(){document.removeEventListener("paste",onPaste);};
+  },[step]);
+
+  function buildGenbyo(d){
+    var L=[];
+    if(d.age&&d.sex)L.push(d.age+"\u6B73"+d.sex+"\u3002");
+    if(d.mainNarrative)L.push(d.mainNarrative);
+    L.push("");
+    if(d.kakuchi.hm)L.push(d.kakuchi.hm+"\u3000\u6D88\u9632\u899A\u77E5");
+    if(d.sessoku.hm)L.push(d.sessoku.hm+"\u3000"+d.squadPrefix+"\u6551\u6025\u968A\u63A5\u89E6");
+    L.push("");
+    if(d.jcs)L.push("JCS "+d.jcs);
+    if(d.rr&&d.rr!=="0")L.push("RR "+d.rr);
+    if(d.spo2&&d.spo2!=="0")L.push("SpO2 "+d.spo2+"%");
+    if(d.hr&&d.hr!=="0")L.push("HR "+d.hr);
+    if(d.bp_sys){var bp=d.bp_sys;if(d.bp_dia)bp+="/"+d.bp_dia;L.push("BP "+bp);}
+    if(d.bt&&d.bt!=="0")L.push("BT "+d.bt+"\u2103");
+    L.push("");
+    if(d.genPatsu.hm)L.push(d.genPatsu.hm+"\u3000\u73FE\u5834\u51FA\u767A");
+    if(d.byoChaku.hm)L.push(d.byoChaku.hm+"\u3000\u75C5\u7740");
+    return L.join("\n");
+  }
+
+  function genKarte(d,e,type){
+    var L=[];
+    L.push("\u3010\u4E3B\u8A34\u3011");L.push(e.chiefComplaint||"");L.push("");
+    L.push("\u3010\u73FE\u75C5\u6B74\u3011");L.push(e.genbyo||"");L.push("");
+    L.push("\u3010\u65E2\u5F80\u6B74\u3011");L.push(e.pastHistory||"");L.push("");
+    L.push("\u3010\u670D\u85AC\u6B74\u3011");L.push(e.medication||"");L.push("");
+    L.push("\u3010\u5BB6\u65CF\u6B74\u3011");L.push(e.familyHistory||"\u4E0D\u660E");L.push("");
+    L.push("\u3010\u751F\u6D3B\u6B74\u3011");L.push("\u55AB\u7159\uFF1A"+(e.smoking||""));L.push("\u98F2\u9152\uFF1A"+(e.alcohol||""));L.push("\u30A2\u30EC\u30EB\u30AE\u30FC\uFF1A"+(e.allergyText||""));L.push("");
+    L.push("\u3010\u6765\u9662\u6642\u73FE\u75C7\u3011");
+    if(type==="cpa"){
+      L.push("\u6CE2\u5F62"+(e.arrivalRhythm||""));
+      L.push("\u547C\u5438"+(e.arrivalBreathing||"\u306A\u3057"));
+      L.push("\u77B3\u5B54"+(e.arrivalPupil||"\u6563\u5927\u56FA\u5B9A"));
+      L.push("BT \u2103");
+    }else{
+      L.push("GCS ");L.push("RR ");L.push("SpO2 %");L.push("HR ");L.push("BP / ");L.push("BT \u2103");
+      if(e.genFindings)L.push(e.genFindings);
+    }
+    L.push("");L.push("");
+    L.push("\u3010\u7D4C\u904E\u3011");
+    if(e.arrivalLine)L.push(e.arrivalLine);
+    if(e.hospitalCourse)L.push(e.hospitalCourse);
+    L.push("");
+    if(type==="cpa"&&e.deathTime){L.push(e.deathTime);L.push("");}
+    L.push("\u3010\u691C\u67FB\u6240\u898B\u3011");L.push(e.labResults||"");L.push("");
+    if(e.imaging){L.push(e.imaging);L.push("");}
+    L.push("\u3010Assessment/Plan\u3011");L.push(e.assessment||"");
+    return L.join("\n");
+  }
+
+  function handleFile(ev){var file=ev.target.files&&ev.target.files[0];if(!file)return;setDecoding(true);setError("");setDebug("QR\u89E3\u6790\u4E2D...");decodeQRFromImage(file).then(function(r){setRawText(r.data);setDebug("QR\u691C\u51FA ("+r.data.length+"\u6587\u5B57 "+r.method+")");setDecoding(false);if(fileRef.current)fileRef.current.value="";}).catch(function(err){setError(err.message);setDecoding(false);if(fileRef.current)fileRef.current.value="";});}
+
+  function initEdits(d,type){
+    var cc=type==="cpa"?"\u9662\u5916\u5FC3\u505C\u6B62":(d.disease||"");
+    var arrLine=d.byoChaku.hm?addMin(d.byoChaku.hm,2)+"\u3000\u521D\u7642\u5BA4\u7740":"";
+    var e={chiefComplaint:cc,genbyo:buildGenbyo(d),pastHistory:(d.allergy||"").replace(/[,\u3001\s]+$/,""),medication:d.medication||"",familyHistory:"\u4E0D\u660E",smoking:"",alcohol:"",allergyText:"",hospitalCourse:"",labResults:"",imaging:"",assessment:"",arrivalLine:arrLine};
+    if(type==="cpa"){e.arrivalRhythm="";e.arrivalBreathing="\u306A\u3057";e.arrivalPupil="\u6563\u5927\u56FA\u5B9A";e.trauma="\u306A\u3057";e.face="\u84BC\u767D";e.ucg="UCG\uFF1A";e.deathTime="";}
+    else{e.genFindings="";}
+    return e;
+  }
+
+  function handleParse(){
+    if(!rawText.trim()){setError("\u30C7\u30FC\u30BF\u3092\u5165\u529B");return;}
+    setError("");setDebug("");
+    try{
+      var res=decodeQRRaw(rawText),parts=parseCSV(res.csv),d=extractFields(parts);
+      setDebug(d.nameKanji+" / "+d.squadPrefix+"\u6551\u6025\u968A / "+(d.isCPA?"CPA":"\u4E00\u822C")+(d.medication?" / \u5185\u670D:"+d.medication.substring(0,20):""));
+      if(!d.nameKanji&&!d.disease&&d.fieldCount<10){setError("\u6709\u52B9\u306AQR\u30C7\u30FC\u30BF\u3092\u8A8D\u8B58\u3067\u304D\u307E\u305B\u3093");return;}
+      setParsed(d);var type=d.isCPA?"cpa":"general";setTplType(type);
+      setEdits(initEdits(d,type));setStep(1);
+    }catch(err){setError("\u30D1\u30FC\u30B9\u30A8\u30E9\u30FC: "+err.message);}
+  }
+
+  function handleManual(){
+    var d={nameKanji:"",nameKana:"",sex:"",age:"",dobFormatted:"",jcs:"",rhythm:"",disease:"",reporter:"",allergy:"",medication:"",mainNarrative:"",memoFamily:"",kakuchi:{hm:""},genChaku:{hm:""},sessoku:{hm:""},byoChaku:{hm:""},genPatsu:{hm:""},squadName:"",squadPrefix:"",bp_sys:"",bp_dia:"",hr:"",rr:"",bt:"",spo2:"",isCPA:false,fieldCount:0};
+    setParsed(d);setTplType("general");
     setEdits({chiefComplaint:"",genbyo:"",pastHistory:"",medication:"",familyHistory:"\u4E0D\u660E",smoking:"",alcohol:"",allergyText:"",hospitalCourse:"",labResults:"",imaging:"",assessment:"",arrivalLine:"",genFindings:""});
     setStep(1);
   }
-  function handleCopy(){if(!outputRef.current)return;var text=outputRef.current.innerText;try{navigator.clipboard.writeText(text).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2500);});}catch(e){var ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;left:-9999px";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(true);setTimeout(function(){setCopied(false);},2500);}}
-var btn={border:"none",padding:"12px 28px",borderRadius:8,fontSize:15,fontWeight:700,cursor:"pointer",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8};var bP=Object.assign({},btn,{background:"#2563eb",color:"#fff"});var bS=Object.assign({},btn,{background:"#16a34a",color:"#fff"});var bO={background:"transparent",color:"#2563eb",border:"2px solid #2563eb",padding:"10px 20px",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer"};var tag=function(bg,fg,text){return ce("span",{style:{display:"inline-block",background:bg,color:fg,padding:"3px 10px",borderRadius:4,fontSize:12,fontWeight:700,marginRight:4}},text);};
-return ce("div",{style:{minHeight:"100vh",background:"#f5f7fa",maxWidth:640,margin:"0 auto"}},ce("div",{style:{background:"linear-gradient(135deg,#0f172a,#1e3a5f)",color:"#fff",padding:"16px 20px",position:"sticky",top:0,zIndex:10}},ce("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},ce("div",null,ce("div",{style:{fontSize:18,fontWeight:800}},"QR \u2192 \u30AB\u30EB\u30C6"),ce("div",{style:{fontSize:11,opacity:0.7,marginTop:2}},"\u6551\u6025\u968AQR\u304B\u3089\u96FB\u5B50\u30AB\u30EB\u30C6\u8A18\u8F09\u3092\u81EA\u52D5\u751F\u6210")),step>0&&ce("button",{onClick:function(){setStep(0);setParsed(null);setEdits({});setRawText("");setError("");setDebug("");},style:Object.assign({},bO,{color:"#fff",borderColor:"rgba(255,255,255,0.4)",padding:"6px 14px",fontSize:12})},"\u30EA\u30BB\u30C3\u30C8")),ce("div",{style:{display:"flex",gap:8,marginTop:12}},["QR\u8AAD\u53D6","\u78BA\u8A8D\u30FB\u7DE8\u96C6","\u30AB\u30EB\u30C6\u51FA\u529B"].map(function(l,i){return ce("div",{key:i,style:{flex:1,textAlign:"center",fontSize:11,fontWeight:600,padding:"5px 0",borderRadius:4,background:step===i?"rgba(255,255,255,0.2)":"transparent",opacity:step===i?1:0.4,borderBottom:step===i?"2px solid #60a5fa":"2px solid transparent"}},l);}))),ce("div",{style:{padding:"20px 16px"}},
-step===0&&ce("div",null,ce("div",{style:{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#1e40af"}},"\uD83D\uDCCB Ctrl+V\u3067QR\u30B3\u30FC\u30C9\u753B\u50CF\u3092\u8CBC\u308A\u4ED8\u3051\u3067\u304D\u307E\u3059"),ce("div",{style:{marginBottom:16}},ce("input",{ref:fileRef,type:"file",accept:"image/*",onChange:handleFile,style:{display:"none"}}),ce("button",{onClick:function(){fileRef.current&&fileRef.current.click()},disabled:decoding,style:Object.assign({},bP,{background:decoding?"#94a3b8":"#1d4ed8"})},decoding?"\u89E3\u6790\u4E2D...":"\uD83D\uDCF7 QR\u753B\u50CF\u3092\u30D5\u30A1\u30A4\u30EB\u9078\u629E")),ce("div",{style:{textAlign:"center",color:"#aaa",fontSize:12,margin:"12px 0",display:"flex",alignItems:"center",gap:12}},ce("div",{style:{flex:1,height:1,background:"#ddd"}}),"\u307E\u305F\u306F",ce("div",{style:{flex:1,height:1,background:"#ddd"}})),ce("div",{style:{marginBottom:16}},ce("div",{style:{fontSize:11,fontWeight:700,color:"#5a6a7a",marginBottom:4}},"\u30C6\u30AD\u30B9\u30C8\u8CBC\u308A\u4ED8\u3051"),ce("textarea",{value:rawText,onChange:function(e){setRawText(e.target.value);setError("");},placeholder:"QR\u30EA\u30FC\u30C0\u30FC\u306E\u7D50\u679C\u3092\u8CBC\u308A\u4ED8\u3051...",rows:4,style:{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:"1px solid #d0d7de",borderRadius:6,fontSize:13,fontFamily:"monospace",background:"#fff",color:"#1a1a2e",resize:"vertical"}})),ce("div",{style:{marginBottom:16}},ce("button",{onClick:function(){setRawText(TEST_DATA);setError("");setDebug("\u30B5\u30F3\u30D7\u30EB\u8AAD\u8FBC\u6E08");},style:Object.assign({},btn,{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:13,fontWeight:500})},"\uD83E\uDDEA \u30B5\u30F3\u30D7\u30EB")),ce("div",{style:{marginBottom:16}},ce("button",{onClick:handleManual,style:Object.assign({},btn,{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:13,fontWeight:500})},"\u270F\uFE0F QR\u306A\u3057\u3067\u4F5C\u6210")),error&&ce("div",{style:{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,padding:"12px 14px",color:"#b91c1c",fontSize:13,marginBottom:12,whiteSpace:"pre-wrap"}},error),debug&&ce("div",{style:{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"8px 12px",color:"#166534",fontSize:12,marginBottom:12}},debug),ce("button",{onClick:handleParse,disabled:!rawText.trim(),style:Object.assign({},bP,{opacity:rawText.trim()?1:0.4})},"\u30C7\u30FC\u30BF\u89E3\u6790 \u2192"),rawText&&ce("div",{style:{marginTop:12,background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",fontSize:11,color:"#6b7280"}},ce("div",{style:{fontFamily:"monospace",wordBreak:"break-all",maxHeight:50,overflow:"hidden"}},rawText.substring(0,150)+(rawText.length>150?"...":"")))),
-step===1&&parsed&&ce("div",null,ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16,borderLeft:"4px solid #2563eb"}},ce("div",{style:{fontSize:17,fontWeight:800,color:"#1a1a2e"}},parsed.nameKanji||"\u6C0F\u540D\u4E0D\u660E",ce("span",{style:{fontSize:12,fontWeight:400,color:"#6b7a8a",marginLeft:8}},parsed.nameKana)),ce("div",{style:{fontSize:13,color:"#4a5a6a",marginTop:2}},parsed.age+"\u6B73 "+parsed.sex+"\u3000"+parsed.dobFormatted+"\u751F"),ce("div",{style:{marginTop:8}},tplType==="cpa"?tag("#dc2626","#fff","CPA"):tag("#2563eb","#fff","\u4E00\u822C"),tag("#f1f5f9","#334155",parsed.disease||parsed.rhythm))),ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",marginBottom:8}},"\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3"),ce(InfoRow,{label:"\u899A\u77E5",value:parsed.kakuchi.hm}),ce(InfoRow,{label:"\u63A5\u89E6",value:parsed.sessoku.hm?(parsed.sessoku.hm+"\uFF08"+parsed.squadPrefix+"\u6551\u6025\u968A\uFF09"):""}),ce(InfoRow,{label:"\u30D0\u30A4\u30BF\u30EB",value:vitalsLine(parsed)||"\u8A18\u9332\u306A\u3057"}),ce(InfoRow,{label:"\u73FE\u767A",value:parsed.genPatsu.hm}),ce(InfoRow,{label:"\u75C5\u7740",value:parsed.byoChaku.hm}),parsed.isCPA&&ce(InfoRow,{label:"\u5FC3\u96FB\u56F3",value:parsed.rhythm}),ce(InfoRow,{label:"\u901A\u5831\u8005",value:parsed.reporter}),ce(InfoRow,{label:"\u95A2\u4FC2\u8005",value:parsed.memoFamily})),ce("div",{style:{display:"flex",gap:8,marginBottom:16}},ce("button",{onClick:function(){setTplType("cpa");},style:{flex:1,padding:"10px",borderRadius:8,border:tplType==="cpa"?"2px solid #dc2626":"2px solid #e5e7eb",background:tplType==="cpa"?"#fef2f2":"#fff",color:tplType==="cpa"?"#dc2626":"#6b7280",fontWeight:700,fontSize:13,cursor:"pointer"}},"\u2764\uFE0F CPA"),ce("button",{onClick:function(){setTplType("general");},style:{flex:1,padding:"10px",borderRadius:8,border:tplType==="general"?"2px solid #2563eb":"2px solid #e5e7eb",background:tplType==="general"?"#eff6ff":"#fff",color:tplType==="general"?"#2563eb":"#6b7280",fontWeight:700,fontSize:13,cursor:"pointer"}},"\uD83C\uDFE5 \u4E00\u822C")),ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},ce(Field,{label:"\u3010\u4E3B\u8A34\u3011",value:edits.chiefComplaint||"",onChange:function(v){ue("chiefComplaint",v)}}),ce(Field,{label:"\u3010\u73FE\u75C5\u6B74\u3011",value:edits.genbyo||"",onChange:function(v){ue("genbyo",v)},rows:14}),ce(Field,{label:"\u3010\u65E2\u5F80\u6B74\u3011",value:edits.pastHistory||"",onChange:function(v){ue("pastHistory",v)}}),ce(Field,{label:"\u3010\u670D\u85AC\u6B74\u3011",value:edits.medication||"",onChange:function(v){ue("medication",v)}}),ce(Field,{label:"\u3010\u5BB6\u65CF\u6B74\u3011",value:edits.familyHistory||"",onChange:function(v){ue("familyHistory",v)}}),ce("div",{style:{display:"flex",gap:8}},ce("div",{style:{flex:1}},ce(Field,{label:"\u55AB\u7159",value:edits.smoking||"",onChange:function(v){ue("smoking",v)}})),ce("div",{style:{flex:1}},ce(Field,{label:"\u98F2\u9152",value:edits.alcohol||"",onChange:function(v){ue("alcohol",v)}}))),ce(Field,{label:"\u30A2\u30EC\u30EB\u30AE\u30FC",value:edits.allergyText||"",onChange:function(v){ue("allergyText",v)}}),ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",margin:"16px 0 8px"}},"\u3010\u73FE\u75C7\u3011\uFF08\u75C5\u9662\u5230\u7740\u6642\u306E\u6240\u898B\u3092\u8A18\u5165\uFF09"),tplType==="cpa"?ce("div",null,ce(Field,{label:"\u6765\u9662\u6642\u30EA\u30BA\u30E0",value:edits.arrivalRhythm||"",onChange:function(v){ue("arrivalRhythm",v)},placeholder:"PEA"}),ce("div",{style:{display:"flex",gap:8}},ce("div",{style:{flex:1}},ce(Field,{label:"\u547C\u5438",value:edits.arrivalBreathing||"",onChange:function(v){ue("arrivalBreathing",v)}})),ce("div",{style:{flex:1}},ce(Field,{label:"\u77B3\u5B54",value:edits.arrivalPupil||"",onChange:function(v){ue("arrivalPupil",v)}}))),ce("div",{style:{display:"flex",gap:8}},ce("div",{style:{flex:1}},ce(Field,{label:"\u5916\u50B7\u6240\u898B",value:edits.trauma||"",onChange:function(v){ue("trauma",v)}})),ce("div",{style:{flex:1}},ce(Field,{label:"\u9854\u9762",value:edits.face||"",onChange:function(v){ue("face",v)}}))),ce(Field,{label:"UCG",value:edits.ucg||"",onChange:function(v){ue("ucg",v)}})):ce("div",null,ce("div",{style:{fontSize:11,color:"#8a9aaa",marginBottom:8}},"\u30AB\u30EB\u30C6\u51FA\u529B\u306B\u7A7A\u6B04\u304C\u751F\u6210\u3055\u308C\u307E\u3059\uFF1AJCS / RR / SpO2 / HR / BP / BT"),ce(Field,{label:"\u305D\u306E\u4ED6\u8EAB\u4F53\u6240\u898B",value:edits.genFindings||"",onChange:function(v){ue("genFindings",v)},rows:3})),ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",margin:"16px 0 8px"}},"\u3010\u7D4C\u904E\u30FB\u691C\u67FB\u3011"),ce(Field,{label:"\u3010\u7D4C\u904E\u3011",value:edits.hospitalCourse||"",onChange:function(v){ue("hospitalCourse",v)},rows:8,placeholder:"\u9662\u5185\u7D4C\u904E\u3092\u8A18\u8F09..."}),tplType==="cpa"&&ce(Field,{label:"\u6B7B\u4EA1\u78BA\u8A8D\u6642\u523B",value:edits.deathTime||"",onChange:function(v){ue("deathTime",v)},placeholder:"15\u664243\u5206\u3000\u6B7B\u4EA1\u78BA\u8A8D"}),ce(Field,{label:"\u3010\u691C\u67FB\u6240\u898B\u3011",value:edits.labResults||"",onChange:function(v){ue("labResults",v)},rows:4}),ce(Field,{label:"\u753B\u50CF\u691C\u67FB",value:edits.imaging||"",onChange:function(v){ue("imaging",v)},rows:3}),ce(Field,{label:"\u3010Assessment/Plan\u3011",value:edits.assessment||"",onChange:function(v){ue("assessment",v)},rows:3})),ce("button",{onClick:function(){setStep(2)},style:bP},"\u30AB\u30EB\u30C6\u6587\u66F8\u3092\u751F\u6210 \u2192")),
-step===2&&parsed&&ce("div",null,ce("div",{style:{position:"sticky",top:80,zIndex:5,display:"flex",gap:8,marginBottom:16}},ce("button",{onClick:handleCopy,style:copied?bS:bP},copied?"\u2713 \u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F":"\uD83D\uDCCB \u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC"),ce("button",{onClick:function(){setStep(1)},style:Object.assign({},bO,{whiteSpace:"nowrap"})},"\u2190 \u7DE8\u96C6")),ce("div",{ref:outputRef,style:{background:"#fff",borderRadius:10,padding:"20px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",fontSize:14,lineHeight:1.8,color:"#1a1a2e",whiteSpace:"pre-wrap",wordBreak:"break-all"}},genKarte(parsed,edits,tplType)),ce("div",{style:{marginTop:16}},ce("button",{onClick:handleCopy,style:copied?bS:bP},copied?"\u2713 \u30B3\u30D4\u30FC\u6E08\u307F":"\uD83D\uDCCB \u30B3\u30D4\u30FC")))));}
+
+  function handleCopy(){
+    if(!outputRef.current)return;var text=outputRef.current.innerText;
+    try{navigator.clipboard.writeText(text).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2500);});}
+    catch(e){var ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;left:-9999px";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(true);setTimeout(function(){setCopied(false);},2500);}
+  }
+
+  function handleGenerate(){
+    setStep(2);
+    setTimeout(handleCopy,150);
+  }
+
+  var btn={border:"none",padding:"12px 28px",borderRadius:8,fontSize:15,fontWeight:700,cursor:"pointer",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8};
+  var bP=Object.assign({},btn,{background:"#2563eb",color:"#fff"});
+  var bS=Object.assign({},btn,{background:"#16a34a",color:"#fff"});
+  var bO={background:"transparent",color:"#2563eb",border:"2px solid #2563eb",padding:"10px 20px",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer"};
+  var tag=function(bg,fg,text){return ce("span",{style:{display:"inline-block",background:bg,color:fg,padding:"3px 10px",borderRadius:4,fontSize:12,fontWeight:700,marginRight:4}},text);};
+
+  return ce("div",{style:{minHeight:"100vh",background:"#f5f7fa",maxWidth:640,margin:"0 auto"}},
+    // Header
+    ce("div",{style:{background:"linear-gradient(135deg,#0f172a,#1e3a5f)",color:"#fff",padding:"16px 20px",position:"sticky",top:0,zIndex:10}},
+      ce("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between"}},
+        ce("div",null,ce("div",{style:{fontSize:18,fontWeight:800}},"QR \u2192 \u30AB\u30EB\u30C6"),ce("div",{style:{fontSize:11,opacity:0.7,marginTop:2}},"\u6551\u6025\u968AQR\u304B\u3089\u96FB\u5B50\u30AB\u30EB\u30C6\u8A18\u8F09\u3092\u81EA\u52D5\u751F\u6210")),
+        step>0&&ce("button",{onClick:function(){setStep(0);setParsed(null);setEdits({});setRawText("");setError("");setDebug("");},style:Object.assign({},bO,{color:"#fff",borderColor:"rgba(255,255,255,0.4)",padding:"6px 14px",fontSize:12})},"\u30EA\u30BB\u30C3\u30C8")),
+      ce("div",{style:{display:"flex",gap:8,marginTop:12}},["QR\u8AAD\u53D6","\u78BA\u8A8D\u30FB\u7DE8\u96C6","\u30AB\u30EB\u30C6\u51FA\u529B"].map(function(l,i){return ce("div",{key:i,style:{flex:1,textAlign:"center",fontSize:11,fontWeight:600,padding:"5px 0",borderRadius:4,background:step===i?"rgba(255,255,255,0.2)":"transparent",opacity:step===i?1:0.4,borderBottom:step===i?"2px solid #60a5fa":"2px solid transparent"}},l);}))),
+    ce("div",{style:{padding:"20px 16px"}},
+
+      // STEP 0
+      step===0&&ce("div",null,
+        ce("div",{style:{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#1e40af"}},"\uD83D\uDCCB Ctrl+V\u3067QR\u753B\u50CF\u3092\u8CBC\u308A\u4ED8\u3051\u3067\u304D\u307E\u3059"),
+        ce("div",{style:{marginBottom:16}},ce("input",{ref:fileRef,type:"file",accept:"image/*",onChange:handleFile,style:{display:"none"}}),ce("button",{onClick:function(){fileRef.current&&fileRef.current.click();},disabled:decoding,style:Object.assign({},bP,{background:decoding?"#94a3b8":"#1d4ed8"})},decoding?"\u89E3\u6790\u4E2D...":"\uD83D\uDCF7 QR\u753B\u50CF\u3092\u30D5\u30A1\u30A4\u30EB\u9078\u629E")),
+        ce("div",{style:{textAlign:"center",color:"#aaa",fontSize:12,margin:"12px 0",display:"flex",alignItems:"center",gap:12}},ce("div",{style:{flex:1,height:1,background:"#ddd"}}),"\u307E\u305F\u306F",ce("div",{style:{flex:1,height:1,background:"#ddd"}})),
+        ce("div",{style:{marginBottom:16}},ce("div",{style:{fontSize:11,fontWeight:700,color:"#5a6a7a",marginBottom:4}},"\u30C6\u30AD\u30B9\u30C8\u8CBC\u308A\u4ED8\u3051"),ce("textarea",{value:rawText,onChange:function(e){setRawText(e.target.value);setError("");},placeholder:"QR\u30EA\u30FC\u30C0\u30FC\u306E\u7D50\u679C\u3092\u8CBC\u308A\u4ED8\u3051...",rows:4,style:{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:"1px solid #d0d7de",borderRadius:6,fontSize:13,fontFamily:"monospace",background:"#fff",color:"#1a1a2e",resize:"vertical"}})),
+        ce("div",{style:{display:"flex",gap:8,marginBottom:16}},
+          ce("button",{onClick:function(){setRawText(TEST_DATA);setError("");setDebug("\u30B5\u30F3\u30D7\u30EB\u8AAD\u8FBC\u6E08");},style:Object.assign({},btn,{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:13,fontWeight:500,flex:1})},"\uD83E\uDDEA \u30B5\u30F3\u30D7\u30EB"),
+          ce("button",{onClick:handleManual,style:Object.assign({},btn,{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:13,fontWeight:500,flex:1})},"\u270F\uFE0F QR\u306A\u3057\u3067\u4F5C\u6210")),
+        error&&ce("div",{style:{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,padding:"12px 14px",color:"#b91c1c",fontSize:13,marginBottom:12,whiteSpace:"pre-wrap"}},error),
+        debug&&ce("div",{style:{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"8px 12px",color:"#166534",fontSize:12,marginBottom:12}},debug),
+        ce("button",{onClick:handleParse,disabled:!rawText.trim(),style:Object.assign({},bP,{opacity:rawText.trim()?1:0.4})},"\u30C7\u30FC\u30BF\u89E3\u6790 \u2192"),
+        rawText&&ce("div",{style:{marginTop:12,background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",fontSize:11,color:"#6b7280"}},ce("div",{style:{fontFamily:"monospace",wordBreak:"break-all",maxHeight:50,overflow:"hidden"}},rawText.substring(0,150)+(rawText.length>150?"...":"")))),
+
+      // STEP 1
+      step===1&&parsed&&ce("div",null,
+        // Generate+Copy button at TOP
+        ce("div",{style:{marginBottom:16}},ce("button",{onClick:handleGenerate,style:Object.assign({},bP,{background:copied?"#16a34a":"#2563eb"})},copied?"\u2713 \u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F":"\u30AB\u30EB\u30C6\u751F\u6210 + \u30B3\u30D4\u30FC")),
+        // Patient card
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16,borderLeft:"4px solid #2563eb"}},
+          ce("div",{style:{fontSize:17,fontWeight:800,color:"#1a1a2e"}},parsed.nameKanji||"\u6C0F\u540D\u4E0D\u660E",ce("span",{style:{fontSize:12,fontWeight:400,color:"#6b7a8a",marginLeft:8}},parsed.nameKana)),
+          ce("div",{style:{fontSize:13,color:"#4a5a6a",marginTop:2}},parsed.age+"\u6B73 "+parsed.sex+"\u3000"+parsed.dobFormatted+"\u751F"),
+          ce("div",{style:{marginTop:8}},tplType==="cpa"?tag("#dc2626","#fff","CPA"):tag("#2563eb","#fff","\u4E00\u822C"),tag("#f1f5f9","#334155",parsed.disease||parsed.rhythm))),
+        // Timeline
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},
+          ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",marginBottom:8}},"\u30BF\u30A4\u30E0\u30E9\u30A4\u30F3"),
+          ce(InfoRow,{label:"\u899A\u77E5",value:parsed.kakuchi.hm}),
+          ce(InfoRow,{label:"\u63A5\u89E6",value:parsed.sessoku.hm?(parsed.sessoku.hm+"\uFF08"+parsed.squadPrefix+"\u6551\u6025\u968A\uFF09"):""}),
+          ce(InfoRow,{label:"\u73FE\u767A",value:parsed.genPatsu.hm}),
+          ce(InfoRow,{label:"\u75C5\u7740",value:parsed.byoChaku.hm}),
+          parsed.isCPA&&ce(InfoRow,{label:"\u5FC3\u96FB\u56F3",value:parsed.rhythm}),
+          ce(InfoRow,{label:"\u901A\u5831\u8005",value:parsed.reporter}),
+          ce(InfoRow,{label:"\u95A2\u4FC2\u8005",value:parsed.memoFamily})),
+        // Template toggle
+        ce("div",{style:{display:"flex",gap:8,marginBottom:16}},
+          ce("button",{onClick:function(){setTplType("cpa");},style:{flex:1,padding:"10px",borderRadius:8,border:tplType==="cpa"?"2px solid #dc2626":"2px solid #e5e7eb",background:tplType==="cpa"?"#fef2f2":"#fff",color:tplType==="cpa"?"#dc2626":"#6b7280",fontWeight:700,fontSize:13,cursor:"pointer"}},"\u2764\uFE0F CPA"),
+          ce("button",{onClick:function(){setTplType("general");},style:{flex:1,padding:"10px",borderRadius:8,border:tplType==="general"?"2px solid #2563eb":"2px solid #e5e7eb",background:tplType==="general"?"#eff6ff":"#fff",color:tplType==="general"?"#2563eb":"#6b7280",fontWeight:700,fontSize:13,cursor:"pointer"}},"\uD83C\uDFE5 \u4E00\u822C")),
+        // Edit fields
+        ce("div",{style:{background:"#fff",borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",marginBottom:16}},
+          ce(Field,{label:"\u3010\u4E3B\u8A34\u3011",value:edits.chiefComplaint||"",onChange:function(v){ue("chiefComplaint",v);}}),
+          ce(Field,{label:"\u3010\u73FE\u75C5\u6B74\u3011",value:edits.genbyo||"",onChange:function(v){ue("genbyo",v);},rows:14}),
+          ce(Field,{label:"\u3010\u65E2\u5F80\u6B74\u3011",value:edits.pastHistory||"",onChange:function(v){ue("pastHistory",v);}}),
+          ce(Field,{label:"\u3010\u670D\u85AC\u6B74\u3011",value:edits.medication||"",onChange:function(v){ue("medication",v);}}),
+          ce(Field,{label:"\u3010\u5BB6\u65CF\u6B74\u3011",value:edits.familyHistory||"",onChange:function(v){ue("familyHistory",v);}}),
+          ce("div",{style:{display:"flex",gap:8}},ce("div",{style:{flex:1}},ce(Field,{label:"\u55AB\u7159",value:edits.smoking||"",onChange:function(v){ue("smoking",v);}})),ce("div",{style:{flex:1}},ce(Field,{label:"\u98F2\u9152",value:edits.alcohol||"",onChange:function(v){ue("alcohol",v);}}))),
+          ce(Field,{label:"\u30A2\u30EC\u30EB\u30AE\u30FC",value:edits.allergyText||"",onChange:function(v){ue("allergyText",v);}}),
+          ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",margin:"16px 0 8px"}},"\u3010\u6765\u9662\u6642\u73FE\u75C7\u3011\uFF08\u75C5\u9662\u5230\u7740\u6642\u306E\u6240\u898B\u3092\u8A18\u5165\uFF09"),
+          tplType==="cpa"?ce("div",null,
+            ce(Field,{label:"\u6CE2\u5F62",value:edits.arrivalRhythm||"",onChange:function(v){ue("arrivalRhythm",v);},placeholder:"PEA"}),
+            ce("div",{style:{display:"flex",gap:8}},ce("div",{style:{flex:1}},ce(Field,{label:"\u547C\u5438",value:edits.arrivalBreathing||"",onChange:function(v){ue("arrivalBreathing",v);}})),ce("div",{style:{flex:1}},ce(Field,{label:"\u77B3\u5B54",value:edits.arrivalPupil||"",onChange:function(v){ue("arrivalPupil",v);}}))),
+            
+            ce(Field,{label:"UCG",value:edits.ucg||"",onChange:function(v){ue("ucg",v);}})):
+          ce("div",null,ce("div",{style:{fontSize:11,color:"#8a9aaa",marginBottom:8}},"\u30AB\u30EB\u30C6\u51FA\u529B\u306B\u7A7A\u6B04\u304C\u751F\u6210\u3055\u308C\u307E\u3059\uFF1AJCS / RR / SpO2 / HR / BP / BT"),ce(Field,{label:"\u305D\u306E\u4ED6\u8EAB\u4F53\u6240\u898B",value:edits.genFindings||"",onChange:function(v){ue("genFindings",v);},rows:3})),
+          ce("div",{style:{fontSize:12,fontWeight:700,color:"#5a6a7a",margin:"16px 0 8px"}},"\u3010\u7D4C\u904E\u30FB\u691C\u67FB\u3011"),
+          ce(Field,{label:"\u3010\u7D4C\u904E\u3011",value:edits.hospitalCourse||"",onChange:function(v){ue("hospitalCourse",v);},rows:8,placeholder:"\u9662\u5185\u7D4C\u904E\u3092\u8A18\u8F09..."}),
+          tplType==="cpa"&&ce(Field,{label:"\u6B7B\u4EA1\u78BA\u8A8D\u6642\u523B",value:edits.deathTime||"",onChange:function(v){ue("deathTime",v);},placeholder:"15\u664243\u5206\u3000\u6B7B\u4EA1\u78BA\u8A8D"}),
+          ce(Field,{label:"\u3010\u691C\u67FB\u6240\u898B\u3011",value:edits.labResults||"",onChange:function(v){ue("labResults",v);},rows:4}),
+          ce(Field,{label:"\u753B\u50CF\u691C\u67FB",value:edits.imaging||"",onChange:function(v){ue("imaging",v);},rows:3}),
+          ce(Field,{label:"\u3010Assessment/Plan\u3011",value:edits.assessment||"",onChange:function(v){ue("assessment",v);},rows:3})),
+        // Generate+Copy button also at bottom
+        ce("button",{onClick:handleGenerate,style:Object.assign({},bP,{background:copied?"#16a34a":"#2563eb"})},copied?"\u2713 \u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F":"\u30AB\u30EB\u30C6\u751F\u6210 + \u30B3\u30D4\u30FC")),
+
+      // STEP 2
+      step===2&&parsed&&ce("div",null,
+        ce("div",{style:{position:"sticky",top:80,zIndex:5,display:"flex",gap:8,marginBottom:16}},
+          ce("button",{onClick:handleCopy,style:copied?bS:bP},copied?"\u2713 \u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F":"\uD83D\uDCCB \u30AF\u30EA\u30C3\u30D7\u30DC\u30FC\u30C9\u306B\u30B3\u30D4\u30FC"),
+          ce("button",{onClick:function(){setStep(1);},style:Object.assign({},bO,{whiteSpace:"nowrap"})},"\u2190 \u7DE8\u96C6")),
+        ce("div",{ref:outputRef,style:{background:"#fff",borderRadius:10,padding:"20px 16px",boxShadow:"0 1px 4px rgba(0,0,0,0.06)",fontSize:14,lineHeight:1.8,color:"#1a1a2e",whiteSpace:"pre-wrap",wordBreak:"break-all"}},genKarte(parsed,edits,tplType)),
+        ce("div",{style:{marginTop:16}},ce("button",{onClick:handleCopy,style:copied?bS:bP},copied?"\u2713 \u30B3\u30D4\u30FC\u6E08\u307F":"\uD83D\uDCCB \u30B3\u30D4\u30FC")))
+    )
+  );
+}
 ReactDOM.createRoot(document.getElementById("root")).render(ce(App));
 </script>
 </body>
